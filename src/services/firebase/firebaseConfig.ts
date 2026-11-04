@@ -15,6 +15,16 @@ export interface FirebaseConfigOptions {
 
 const STORAGE_KEY = 'signovanta_firebase_config';
 
+export const DEFAULT_FIREBASE_CONFIG: FirebaseConfigOptions = {
+  apiKey: "AIzaSyAHkx9qYgGtFBcBrDEkwDCdzFuFwmXScz0",
+  authDomain: "signovanta.firebaseapp.com",
+  projectId: "signovanta",
+  storageBucket: "signovanta.firebasestorage.app",
+  messagingSenderId: "574750972542",
+  appId: "1:574750972542:web:794ff8f3ea75d89a4b962f",
+  databaseURL: "https://signovanta-default-rtdb.asia-southeast1.firebasedatabase.app",
+};
+
 export function getSavedFirebaseConfig(): FirebaseConfigOptions | null {
   try {
     // 1. Check Vite Environment Variables
@@ -43,7 +53,7 @@ export function getSavedFirebaseConfig(): FirebaseConfigOptions | null {
   } catch (err) {
     console.warn('[SIGNOVANTA] Error reading Firebase configuration:', err);
   }
-  return null;
+  return DEFAULT_FIREBASE_CONFIG;
 }
 
 export function saveFirebaseConfig(config: FirebaseConfigOptions): void {

@@ -48,7 +48,7 @@ service cloud.firestore {
 
     // 2. Students collection: Preloaded & student profiles
     match /students/{studentId} {
-      allow read: if isAuthenticated();
+      allow read: if true; // Publicly readable for pre-login registration verification
       allow create, delete: if isMasterAdmin();
       allow update: if isMasterAdmin() || (
         isAuthenticated() && (
@@ -119,17 +119,17 @@ service cloud.firestore {
 
     // 7. Event Categories: Dynamic category catalogue
     match /eventCategories/{categoryId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow write: if isMasterAdmin();
     }
 
     // 8. Academic Sections & Departments
     match /sections/{sectionId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow write: if isMasterAdmin();
     }
     match /departments/{departmentId} {
-      allow read: if isAuthenticated();
+      allow read: if true;
       allow write: if isMasterAdmin();
     }
 
