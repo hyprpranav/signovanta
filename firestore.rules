@@ -1,0 +1,158 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function getUserRole() {
+      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        ? getUserData().role
+        : null;
+    }
+
+    function isMasterAdmin() {
+      return getUserRole() == 'MASTER_ADMIN';
+    }
+
+    function isStaffMember() {
+      return getUserRole() in ['STAFF', 'HOD', 'AHOD'];
+    }
+
+    function isHOD() {
+      return getUserRole() in ['HOD', 'AHOD', 'MASTER_ADMIN'];
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // 1. Users collection: Auth mapping & metadata
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && (request.auth.uid == userId || isMasterAdmin());
+      // Users can update non-privileged fields (displayName, mobile, profilePhotoUrl, hasSetPassword)
+      // but CANNOT change their role or account status unless Master Admin
+      allow update: if isMasterAdmin() || (
+        isOwner(userId) &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'status', 'registrationNumber', 'department'])
+      );
+      allow delete: if isMasterAdmin();
+    }
+
+    // 2. Students collection: Preloaded & student profiles
+    match /students/{studentId} {
+      allow read: if isAuthenticated();
+      allow create, delete: if isMasterAdmin();
+      allow update: if isMasterAdmin() || (
+        isAuthenticated() && (
+          // Student editing their own permitted profile fields
+          (resource.data.uid == request.auth.uid && 
+           !request.resource.data.diff(resource.data).affectedKeys().hasAny(['registrationNumber', 'department', 'academicYear', 'section', 'status', 'isActivated'])) ||
+          // First-time activation linking UID
+          (!resource.data.hasSetPassword && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['uid', 'hasSetPassword', 'isActivated', 'profilePhotoUrl', 'mobile', 'email', 'updatedAt'])) ||
+          // Staff / Admin updating status
+          isStaffMember()
+        )
+      );
+    }
+
+    // 3. Staff collection: Staff directory & pending role requests
+    match /staff/{staffId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && (request.auth.uid == staffId || isMasterAdmin());
+      allow update: if isMasterAdmin() || (
+        isAuthenticated() && request.auth.uid == staffId &&
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['assignedRole', 'approvalStatus', 'isSuspended'])
+      );
+      allow delete: if isMasterAdmin();
+    }
+
+    // 4. Event Applications: Lifecycle management
+    match /eventApplications/{applicationId} {
+      allow read: if isAuthenticated();
+      // Students can create their own applications
+      allow create: if isAuthenticated() && (
+        request.resource.data.studentId == request.auth.uid ||
+        request.resource.data.leaderUid == request.auth.uid ||
+        isMasterAdmin()
+      );
+      // Students can update their own drafts or submit post-event certificates
+      // Staff / HOD can update status and approval fields
+      allow update: if isAuthenticated() && (
+        isStaffMember() || isMasterAdmin() ||
+        (resource.data.studentId == request.auth.uid && resource.data.status in ['DRAFT', 'CORRECTION_REQUIRED', 'PRE_APPROVED']) ||
+        (resource.data.leaderUid == request.auth.uid && resource.data.status in ['DRAFT', 'CORRECTION_REQUIRED', 'PRE_APPROVED'])
+      );
+      allow delete: if isMasterAdmin() || (
+        isAuthenticated() && resource.data.studentId == request.auth.uid && resource.data.status == 'DRAFT'
+      );
+    }
+
+    // 5. Team Memberships
+    match /teamMemberships/{teamId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      // Team leader can manage team or invited member can confirm/decline participation
+      allow update: if isAuthenticated() && (
+        resource.data.leaderUid == request.auth.uid ||
+        isStaffMember() || isMasterAdmin() ||
+        // Member updating their own confirmation status
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members', 'updatedAt'])
+      );
+      allow delete: if isMasterAdmin() || (isAuthenticated() && resource.data.leaderUid == request.auth.uid);
+    }
+
+    // 6. Approvals: Official audit records for verification steps
+    match /approvals/{approvalId} {
+      allow read: if isAuthenticated();
+      // Only staff, HOD, or Master Admin can create approval records
+      allow create: if isStaffMember() || isMasterAdmin();
+      allow update, delete: if isMasterAdmin();
+    }
+
+    // 7. Event Categories: Dynamic category catalogue
+    match /eventCategories/{categoryId} {
+      allow read: if isAuthenticated();
+      allow write: if isMasterAdmin();
+    }
+
+    // 8. Academic Sections & Departments
+    match /sections/{sectionId} {
+      allow read: if isAuthenticated();
+      allow write: if isMasterAdmin();
+    }
+    match /departments/{departmentId} {
+      allow read: if isAuthenticated();
+      allow write: if isMasterAdmin();
+    }
+
+    // 9. Notifications: Individual user inbox
+    match /notifications/{notificationId} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isMasterAdmin());
+      allow create: if isAuthenticated(); // Triggered by workflows
+      allow update: if isAuthenticated() && (resource.data.userId == request.auth.uid || isMasterAdmin());
+      allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isMasterAdmin());
+    }
+
+    // 10. Audit Logs: Tamper-proof system activity log
+    match /auditLogs/{logId} {
+      allow read: if isStaffMember() || isMasterAdmin();
+      allow create: if isAuthenticated();
+      allow update, delete: if false; // Immutable audit trail
+    }
+
+    // 11. System Settings: Global flags & configurations
+    match /systemSettings/{settingId} {
+      allow read: if isAuthenticated();
+      allow write: if isMasterAdmin();
+    }
+  }
+}
+
