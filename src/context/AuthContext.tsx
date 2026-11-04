@@ -1,13 +1,19 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { UserProfile, Student, Staff, UserRole } from '../types';
+import { UserProfile, Student, Staff, UserRole, StudentRegistrationRequest } from '../types';
 import {
   studentLogin as authStudentLogin,
   completeFirstLogin as authCompleteFirstLogin,
   staffLogin as authStaffLogin,
   masterAdminLogin as authMasterAdminLogin,
+  quickLoginAsBoomika,
+  universalLogin as authUniversalLogin,
   signOutUser,
   getLocalStudents,
   getLocalStaff,
+  getStudentRegistrationRequests,
+  submitStudentRegistrationRequest,
+  approveStudentRegistrationRequest,
+  rejectStudentRegistrationRequest,
 } from '../services/firebase/authService';
 
 interface AuthContextType {
@@ -15,12 +21,19 @@ interface AuthContextType {
   studentData: Student | null;
   staffData: Staff | null;
   isLoading: boolean;
-  loginAsStudent: (regNo: string, pwd: string) => Promise<{ requiresPasswordChange: boolean }>;
+  universalLogin: (identifier: string, pwd: string) => Promise<{ requiresPasswordChange: boolean; student?: Student }>;
+  loginAsAdminBoomikaQuick: () => Promise<void>;
+  loginAsStudent: (regNo: string, pwd: string) => Promise<{ requiresPasswordChange: boolean; student: Student }>;
   completeFirstTimeLogin: (newPassword: string, updates: { mobile?: string; email?: string; profilePhotoUrl?: string; profilePhotoPublicId?: string }) => Promise<void>;
   loginAsStaff: (email: string, pwd: string) => Promise<void>;
   loginAsMasterAdmin: (pin: string) => Promise<void>;
   logout: () => Promise<void>;
   updateCurrentStudentProfile: (updates: Partial<Student>) => void;
+  // Student registration request methods
+  submitStudentRequest: (data: { registrationNumber: string; fullName: string; email: string; mobile: string; section: string }) => Promise<StudentRegistrationRequest>;
+  getPendingStudentRequests: () => StudentRegistrationRequest[];
+  approveStudentRequest: (requestId: string) => Student;
+  rejectStudentRequest: (requestId: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -58,6 +71,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }, []);
 
+  const universalLogin = async (identifier: string, pwd: string) => {
+    setIsLoading(true);
+    try {
+      const res = await authUniversalLogin(identifier, pwd);
+      setCurrentUser(res.user);
+      if (res.student) {
+        setStudentData(res.student);
+        setStaffData(null);
+      } else if (res.staff) {
+        setStaffData(res.staff);
+        setStudentData(null);
+      } else {
+        setStudentData(null);
+        setStaffData(null);
+      }
+
+      if (!res.requiresPasswordChange) {
+        localStorage.setItem(CURRENT_USER_STORAGE, JSON.stringify(res.user));
+      }
+      return { requiresPasswordChange: res.requiresPasswordChange, student: res.student };
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loginAsAdminBoomikaQuick = async () => {
+    setIsLoading(true);
+    try {
+      const user = await quickLoginAsBoomika();
+      setCurrentUser(user);
+      setStudentData(null);
+      setStaffData(null);
+      localStorage.setItem(CURRENT_USER_STORAGE, JSON.stringify(user));
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const loginAsStudent = async (regNo: string, pwd: string) => {
     setIsLoading(true);
     try {
@@ -68,7 +119,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!requiresPasswordChange) {
         localStorage.setItem(CURRENT_USER_STORAGE, JSON.stringify(user));
       }
-      return { requiresPasswordChange };
+      return { requiresPasswordChange, student };
     } finally {
       setIsLoading(false);
     }
@@ -158,12 +209,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         studentData,
         staffData,
         isLoading,
+        universalLogin,
+        loginAsAdminBoomikaQuick,
         loginAsStudent,
         completeFirstTimeLogin,
         loginAsStaff,
         loginAsMasterAdmin,
         logout,
         updateCurrentStudentProfile,
+        submitStudentRequest: submitStudentRegistrationRequest,
+        getPendingStudentRequests: getStudentRegistrationRequests,
+        approveStudentRequest: approveStudentRegistrationRequest,
+        rejectStudentRequest: rejectStudentRegistrationRequest,
       }}
     >
       {children}

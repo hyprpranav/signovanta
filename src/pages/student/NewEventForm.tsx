@@ -450,10 +450,9 @@ export const NewEventForm: React.FC<NewEventFormProps> = ({ onBack, onSuccess })
               onChange={(e) => setFacultyCoordinator(e.target.value)}
               className="w-full px-3 py-2.5 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900 font-medium"
             >
-              <option value="Dr. Priya Sundaram">Dr. Priya Sundaram (AHOD - ECE)</option>
-              <option value="Dr. Arun Kumar M">Dr. Arun Kumar M (HOD - Civil)</option>
-              <option value="Prof. Ramesh K">Prof. Ramesh K (Faculty - CSE)</option>
-              <option value="Dr. Venkatesh Raman">Dr. Venkatesh Raman (Faculty - ECE)</option>
+              <option value="Dr. Priya Sundaram">Dr. Priya Sundaram (Associate Professor & AHOD - ECE)</option>
+              <option value="Dr. M. Sangeetha">Dr. M. Sangeetha (Professor & HOD - ECE)</option>
+              <option value="Prof. R. Venkatesh">Prof. R. Venkatesh (Assistant Professor - ECE)</option>
             </select>
           </div>
 

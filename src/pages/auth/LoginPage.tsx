@@ -2,10 +2,10 @@ import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { Student } from '../../types';
 import { Button } from '../../components/common/Button';
+import { Modal } from '../../components/common/Modal';
 import { FirstTimeActivationModal } from '../../components/common/FirstTimeActivationModal';
+import { registerStaffRequest } from '../../services/firebase/authService';
 import {
-  GraduationCap,
-  Briefcase,
   ShieldCheck,
   Lock,
   User,
@@ -15,107 +15,155 @@ import {
   CheckCircle2,
   Flame,
   ArrowRight,
+  GraduationCap,
+  Briefcase,
+  Phone,
+  Building,
 } from 'lucide-react';
 
 interface LoginPageProps {
   onOpenFirebaseGuide: () => void;
-  onNavigateToStaffRegister: () => void;
+  onNavigateToStaffRegister?: () => void;
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({
   onOpenFirebaseGuide,
-  onNavigateToStaffRegister,
 }) => {
-  const { loginAsStudent, loginAsStaff, loginAsMasterAdmin } = useAuth();
-  const [authPortal, setAuthPortal] = useState<'STUDENT' | 'STAFF' | 'ADMIN'>('STUDENT');
+  const { universalLogin, loginAsAdminBoomikaQuick, submitStudentRequest } = useAuth();
 
-  // Student Form
-  const [studentRegNo, setStudentRegNo] = useState('927624BEC066');
-  const [studentPassword, setStudentPassword] = useState('927624BEC066');
+  // Single Unified Login Credentials
+  const [identifier, setIdentifier] = useState('927624BEC001');
+  const [password, setPassword] = useState('927624BEC001');
 
-  // Staff Form
-  const [staffEmail, setStaffEmail] = useState('arunkumar.hod@college.edu');
-  const [staffPassword, setStaffPassword] = useState('password123');
-
-  // Master Admin Form
-  const [adminPin, setAdminPin] = useState('admin123');
-
-  // Activation Modal State
+  // Activation Modal State for first-time student login
   const [activationStudent, setActivationStudent] = useState<Student | null>(null);
 
-  const [isLoading, setIsLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  // Registration Request Modal
+  const [showRequestModal, setShowRequestModal] = useState(false);
+  const [requestType, setRequestType] = useState<'STUDENT' | 'STAFF'>('STUDENT');
 
-  const handleStudentSubmit = async (e: React.FormEvent) => {
+  // Student Request Form State
+  const [reqStdName, setReqStdName] = useState('');
+  const [reqStdRegNo, setReqStdRegNo] = useState('');
+  const [reqStdSection, setReqStdSection] = useState('III Year ECE A');
+  const [reqStdEmail, setReqStdEmail] = useState('');
+  const [reqStdMobile, setReqStdMobile] = useState('');
+
+  // Staff Request Form State
+  const [reqStaffName, setReqStaffName] = useState('');
+  const [reqStaffId, setReqStaffId] = useState('');
+  const [reqStaffEmail, setReqStaffEmail] = useState('');
+  const [reqStaffMobile, setReqStaffMobile] = useState('');
+  const [reqStaffDesignation, setReqStaffDesignation] = useState('Assistant Professor');
+  const [reqStaffRole, setReqStaffRole] = useState<'STAFF' | 'HOD' | 'AHOD'>('STAFF');
+  const [reqStaffPassword, setReqStaffPassword] = useState('');
+
+  const [isLoading, setIsLoading] = useState(false);
+  const [isQuickAdminLoading, setIsQuickAdminLoading] = useState(false);
+  const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [requestSuccessMessage, setRequestSuccessMessage] = useState<string | null>(null);
+  const [requestErrorMessage, setRequestErrorMessage] = useState<string | null>(null);
+
+  // Single unified submission handler
+  const handleUnifiedSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
     setIsLoading(true);
 
     try {
-      const res = await loginAsStudent(studentRegNo, studentPassword);
-      if (res.requiresPasswordChange) {
-        // Pre-create student object for activation modal
-        setActivationStudent({
-          id: `std_${studentRegNo.toLowerCase().trim()}`,
-          registrationNumber: studentRegNo.toUpperCase().trim(),
-          fullName: 'Siva Prakash K',
-          email: `${studentRegNo.toLowerCase().trim()}@college.edu`,
-          mobile: '9842109876',
-          department: 'Electronics & Communication',
-          academicYear: 'III Year',
-          section: 'III Year V Section',
-          status: 'NOT_ACTIVATED',
-          isActivated: false,
-          hasSetPassword: false,
-          createdAt: new Date().toISOString(),
-          eventCount: 0,
-        });
+      const res = await universalLogin(identifier, password);
+      if (res.requiresPasswordChange && res.student) {
+        setActivationStudent(res.student);
       }
     } catch (err: any) {
-      setErrorMessage(err.message || 'Login failed.');
+      setErrorMessage(err.message || 'Authentication failed. Please verify your credentials.');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleStaffSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // 1-Click Master Admin Login
+  const handleQuickAdminLogin = async () => {
     setErrorMessage(null);
-    setIsLoading(true);
+    setIsQuickAdminLoading(true);
+    try {
+      await loginAsAdminBoomikaQuick();
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Quick Admin login failed.');
+    } finally {
+      setIsQuickAdminLoading(false);
+    }
+  };
+
+  // Submit Student Registration Request
+  const handleSubmitStudentRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setRequestErrorMessage(null);
+    setIsSubmittingRequest(true);
 
     try {
-      await loginAsStaff(staffEmail, staffPassword);
+      await submitStudentRequest({
+        fullName: reqStdName,
+        registrationNumber: reqStdRegNo,
+        section: reqStdSection,
+        email: reqStdEmail,
+        mobile: reqStdMobile,
+      });
+
+      setRequestSuccessMessage(`Registration request for ${reqStdRegNo.toUpperCase()} submitted successfully! Admin Boomika will review and approve.`);
+      setReqStdName('');
+      setReqStdRegNo('');
+      setReqStdEmail('');
+      setReqStdMobile('');
     } catch (err: any) {
-      setErrorMessage(err.message || 'Staff login failed.');
+      setRequestErrorMessage(err.message || 'Failed to submit student request.');
     } finally {
-      setIsLoading(false);
+      setIsSubmittingRequest(false);
     }
   };
 
-  const handleAdminSubmit = async (e: React.FormEvent) => {
+  // Submit Staff Registration Request
+  const handleSubmitStaffRequest = async (e: React.FormEvent) => {
     e.preventDefault();
-    setErrorMessage(null);
-    setIsLoading(true);
+    setRequestErrorMessage(null);
 
+    if (reqStaffPassword.length < 6) {
+      setRequestErrorMessage('Password must be at least 6 characters.');
+      return;
+    }
+
+    setIsSubmittingRequest(true);
     try {
-      await loginAsMasterAdmin(adminPin);
+      await registerStaffRequest({
+        fullName: reqStaffName,
+        staffId: reqStaffId,
+        email: reqStaffEmail,
+        mobile: reqStaffMobile,
+        department: 'Electronics & Communication Engineering',
+        designation: reqStaffDesignation,
+        requestedRole: reqStaffRole,
+        password: reqStaffPassword,
+      });
+
+      setRequestSuccessMessage(`Faculty request for ${reqStaffName} submitted successfully! Admin Boomika will review and approve.`);
+      setReqStaffName('');
+      setReqStaffId('');
+      setReqStaffEmail('');
+      setReqStaffMobile('');
+      setReqStaffPassword('');
     } catch (err: any) {
-      setErrorMessage(err.message || 'Master Admin access denied.');
+      setRequestErrorMessage(err.message || 'Failed to submit staff request.');
     } finally {
-      setIsLoading(false);
+      setIsSubmittingRequest(false);
     }
   };
 
-  // Quick Demo Account Helpers for Paired Verification
-  const quickStudentFill = (reg: string) => {
-    setStudentRegNo(reg);
-    setStudentPassword(reg);
-  };
-
-  const quickStaffFill = (email: string) => {
-    setStaffEmail(email);
-    setStaffPassword('password123');
+  // Quick fill helper for testing authentic credentials
+  const fillSample = (id: string, pwd: string) => {
+    setIdentifier(id);
+    setPassword(pwd);
+    setErrorMessage(null);
   };
 
   return (
@@ -145,67 +193,48 @@ export const LoginPage: React.FC<LoginPageProps> = ({
         </button>
       </div>
 
-      {/* Main Login Card */}
-      <div className="max-w-md w-full mx-auto my-auto py-8">
+      {/* SINGLE UNIFIED LOGIN CARD */}
+      <div className="max-w-md w-full mx-auto my-auto py-6">
         <div className="bg-white text-slate-900 rounded-3xl shadow-2xl border border-slate-200/80 p-6 sm:p-8 space-y-6">
           {/* Header */}
           <div className="text-center space-y-1">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full inline-block mb-1">
+              ECE Department Portal • 3rd Year
+            </span>
             <h2 className="text-2xl font-black tracking-tight text-slate-900">
-              Welcome to SIGNOVANTA
+              Sign In to SIGNOVANTA
             </h2>
             <p className="text-xs text-slate-500 font-medium">
-              Student Event Management & Multi-Tier Verification Gateway
+              Enter your credentials to access your dashboard automatically
             </p>
           </div>
 
-          {/* Three Portal Switcher */}
-          <div className="flex bg-slate-100 p-1 rounded-2xl">
-            <button
-              onClick={() => {
-                setAuthPortal('STUDENT');
-                setErrorMessage(null);
-              }}
-              className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                authPortal === 'STUDENT'
-                  ? 'bg-slate-900 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
+          {/* 1-Click Master Admin Login Button */}
+          <div className="p-3 bg-gradient-to-r from-purple-50 via-indigo-50 to-blue-50 border border-purple-200/80 rounded-2xl space-y-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ShieldCheck size={16} className="text-purple-600" />
+                <span className="text-xs font-bold text-purple-950">Master Admin Portal</span>
+              </div>
+              <span className="text-[10px] font-bold text-purple-700 bg-purple-100/80 px-2 py-0.5 rounded-md">
+                Admin: Boomika
+              </span>
+            </div>
+            <Button
+              type="button"
+              variant="primary"
+              size="sm"
+              fullWidth
+              isLoading={isQuickAdminLoading}
+              onClick={handleQuickAdminLogin}
+              className="bg-purple-900 hover:bg-purple-950 text-white font-bold"
             >
-              <GraduationCap size={15} />
-              <span>Student</span>
-            </button>
-
-            <button
-              onClick={() => {
-                setAuthPortal('STAFF');
-                setErrorMessage(null);
-              }}
-              className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                authPortal === 'STAFF'
-                  ? 'bg-slate-900 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <Briefcase size={15} />
-              <span>Staff / HOD</span>
-            </button>
-
-            <button
-              onClick={() => {
-                setAuthPortal('ADMIN');
-                setErrorMessage(null);
-              }}
-              className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                authPortal === 'ADMIN'
-                  ? 'bg-slate-900 text-white shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <ShieldCheck size={15} />
-              <span>Master Admin</span>
-            </button>
+              <Sparkles size={14} className="mr-1.5 text-amber-300" />
+              1-Click Master Admin Login (Boomika)
+            </Button>
           </div>
 
+          {/* Error Message */}
           {errorMessage && (
             <div className="p-3.5 bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl text-xs flex items-center gap-2">
               <AlertCircle size={16} className="shrink-0" />
@@ -213,219 +242,111 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             </div>
           )}
 
-          {/* STUDENT LOGIN FORM */}
-          {authPortal === 'STUDENT' && (
-            <form onSubmit={handleStudentSubmit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Registration Number <span className="text-rose-500">*</span>
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    required
-                    value={studentRegNo}
-                    onChange={(e) => setStudentRegNo(e.target.value)}
-                    placeholder="e.g. 927624BEC066"
-                    className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900 font-mono uppercase"
-                  />
-                  <User size={15} className="absolute left-3 top-3 text-slate-400" />
-                </div>
-                <p className="text-[11px] text-slate-400 mt-1">
-                  Case-insensitive. Preloaded for 3rd Year cohorts.
-                </p>
+          {/* SINGLE UNIFIED LOGIN FORM */}
+          <form onSubmit={handleUnifiedSubmit} className="space-y-4">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Registration Number or Email Address <span className="text-rose-500">*</span>
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  required
+                  value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)}
+                  placeholder="e.g. 927624BEC001 or boomika@gmail.com"
+                  className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900 font-medium"
+                />
+                <User size={15} className="absolute left-3 top-3 text-slate-400" />
               </div>
+              <p className="text-[11px] text-slate-500 mt-1">
+                Students use Registration Number (case-insensitive) • Faculty & Admin use Email
+              </p>
+            </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Password <span className="text-rose-500">*</span>
-                </label>
-                <div className="relative">
-                  <input
-                    type="password"
-                    required
-                    value={studentPassword}
-                    onChange={(e) => setStudentPassword(e.target.value)}
-                    placeholder="Initial password = Registration Number"
-                    className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900 font-mono"
-                  />
-                  <Lock size={15} className="absolute left-3 top-3 text-slate-400" />
-                </div>
-                <p className="text-[11px] text-blue-600 mt-1">
-                  First login? Use your Registration Number as password.
-                </p>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Password <span className="text-rose-500">*</span>
+              </label>
+              <div className="relative">
+                <input
+                  type="password"
+                  required
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter your password"
+                  className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900 font-mono"
+                />
+                <Lock size={15} className="absolute left-3 top-3 text-slate-400" />
               </div>
+              <p className="text-[11px] text-blue-600 mt-1">
+                First login as student? Your initial password is your Registration Number.
+              </p>
+            </div>
 
-              <Button type="submit" variant="primary" fullWidth isLoading={isLoading} size="lg">
-                Sign In as Student
-              </Button>
+            <Button type="submit" variant="primary" fullWidth isLoading={isLoading} size="lg">
+              Sign In to Dashboard
+            </Button>
 
-              {/* Quick Select Preset Buttons for testing */}
-              <div className="pt-2 border-t border-slate-100 space-y-1.5">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-                  Quick Cohort Demo Logins:
-                </span>
-                <div className="grid grid-cols-2 gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => quickStudentFill('927624BEC066')}
-                    className="p-1.5 text-[11px] font-mono bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-slate-700 font-semibold text-left truncate cursor-pointer"
-                  >
-                    927624BEC066 (V-Sec, First Time)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => quickStudentFill('927624BEC014')}
-                    className="p-1.5 text-[11px] font-mono bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-slate-700 font-semibold text-left truncate cursor-pointer"
-                  >
-                    927624BEC014 (Active, 2 Events)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => quickStudentFill('927624BCS008')}
-                    className="p-1.5 text-[11px] font-mono bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-slate-700 font-semibold text-left truncate cursor-pointer"
-                  >
-                    927624BCS008 (A-Sec, CSE)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => quickStudentFill('927624BCE003')}
-                    className="p-1.5 text-[11px] font-mono bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-slate-700 font-semibold text-left truncate cursor-pointer"
-                  >
-                    927624BCE003 (C-Sec, Civil)
-                  </button>
-                </div>
-              </div>
-            </form>
-          )}
-
-          {/* STAFF LOGIN FORM */}
-          {authPortal === 'STAFF' && (
-            <form onSubmit={handleStaffSubmit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Official College Email <span className="text-rose-500">*</span>
-                </label>
-                <div className="relative">
-                  <input
-                    type="email"
-                    required
-                    value={staffEmail}
-                    onChange={(e) => setStaffEmail(e.target.value)}
-                    placeholder="faculty@college.edu"
-                    className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900"
-                  />
-                  <Mail size={15} className="absolute left-3 top-3 text-slate-400" />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Password <span className="text-rose-500">*</span>
-                </label>
-                <div className="relative">
-                  <input
-                    type="password"
-                    required
-                    value={staffPassword}
-                    onChange={(e) => setStaffPassword(e.target.value)}
-                    placeholder="Enter password"
-                    className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900 font-mono"
-                  />
-                  <Lock size={15} className="absolute left-3 top-3 text-slate-400" />
-                </div>
-              </div>
-
-              <Button type="submit" variant="primary" fullWidth isLoading={isLoading} size="lg">
-                Sign In to Staff Portal
-              </Button>
-
-              <div className="text-center pt-2">
+            {/* Quick Authentic Fill Chips */}
+            <div className="pt-2 border-t border-slate-100 space-y-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
+                Quick Preset Authentic Logins:
+              </span>
+              <div className="grid grid-cols-2 gap-1.5">
                 <button
                   type="button"
-                  onClick={onNavigateToStaffRegister}
-                  className="text-xs text-blue-600 hover:underline font-bold inline-flex items-center gap-1 cursor-pointer"
+                  onClick={() => fillSample('927624BEC001', '927624BEC001')}
+                  className="p-1.5 text-[11px] font-mono bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-slate-700 font-semibold text-left truncate cursor-pointer"
                 >
-                  <span>New Staff Member? Submit Registration Request</span>
-                  <ArrowRight size={13} />
+                  927624BEC001 (ECE A)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => fillSample('927624BEC190', '927624BEC190')}
+                  className="p-1.5 text-[11px] font-mono bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-slate-700 font-semibold text-left truncate cursor-pointer"
+                >
+                  927624BEC190 (ECE D)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => fillSample('priya.ece@college.edu', 'password123')}
+                  className="p-1.5 text-[11px] bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-slate-700 font-semibold text-left truncate cursor-pointer"
+                >
+                  Dr. Priya (AHOD ECE)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => fillSample('boomika@gmail.com', '927624')}
+                  className="p-1.5 text-[11px] bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg text-purple-900 font-semibold text-left truncate cursor-pointer"
+                >
+                  Boomika (Admin)
                 </button>
               </div>
+            </div>
 
-              {/* Demo Staff Accounts */}
-              <div className="pt-2 border-t border-slate-100 space-y-1.5">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-                  Quick Staff Demo Accounts:
-                </span>
-                <div className="grid grid-cols-2 gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => quickStaffFill('arunkumar.hod@college.edu')}
-                    className="p-1.5 text-[11px] bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-slate-700 font-semibold text-left truncate cursor-pointer"
-                  >
-                    Dr. Arun Kumar (HOD)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => quickStaffFill('priya.ahod@college.edu')}
-                    className="p-1.5 text-[11px] bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-slate-700 font-semibold text-left truncate cursor-pointer"
-                  >
-                    Dr. Priya (AHOD)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => quickStaffFill('ramesh.cse@college.edu')}
-                    className="p-1.5 text-[11px] bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-slate-700 font-semibold text-left truncate cursor-pointer"
-                  >
-                    Prof. Ramesh (STAFF)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => quickStaffFill('venkatesh.ece@college.edu')}
-                    className="p-1.5 text-[11px] bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg text-amber-800 font-semibold text-left truncate cursor-pointer"
-                  >
-                    Dr. Venkatesh (PENDING)
-                  </button>
-                </div>
-              </div>
-            </form>
-          )}
-
-          {/* MASTER ADMIN LOGIN FORM */}
-          {authPortal === 'ADMIN' && (
-            <form onSubmit={handleAdminSubmit} className="space-y-4">
-              <div className="p-3 bg-purple-50 border border-purple-200 rounded-2xl text-xs text-purple-900">
-                <strong>Privileged Single Master Admin Gateway:</strong> Access requires master administrator security key.
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  Master Administrator Security Key <span className="text-rose-500">*</span>
-                </label>
-                <div className="relative">
-                  <input
-                    type="password"
-                    required
-                    value={adminPin}
-                    onChange={(e) => setAdminPin(e.target.value)}
-                    placeholder="Enter Master Security Key"
-                    className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900 font-mono"
-                  />
-                  <Lock size={15} className="absolute left-3 top-3 text-slate-400" />
-                </div>
-                <p className="text-[11px] text-slate-400 mt-1">Default PIN: admin123</p>
-              </div>
-
-              <Button type="submit" variant="primary" fullWidth isLoading={isLoading} size="lg">
-                Authenticate Master Admin
-              </Button>
-            </form>
-          )}
+            {/* Registration Request Link */}
+            <div className="text-center pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowRequestModal(true);
+                  setRequestSuccessMessage(null);
+                  setRequestErrorMessage(null);
+                }}
+                className="text-xs text-blue-600 hover:text-blue-800 font-bold inline-flex items-center gap-1 cursor-pointer transition-colors"
+              >
+                <span>New Student or Faculty? Submit Registration Request</span>
+                <ArrowRight size={13} />
+              </button>
+            </div>
+          </form>
         </div>
       </div>
 
       {/* Footer Info */}
       <div className="text-center text-xs text-slate-500 py-3">
-        SIGNOVANTA Platform • Student Event Participation & Activity Monitoring System
+        SIGNOVANTA • Electronics & Communication Engineering • 3rd Year Event Gateway
       </div>
 
       {/* Mandatory First-Time Password Reset Modal */}
@@ -435,11 +356,291 @@ export const LoginPage: React.FC<LoginPageProps> = ({
           student={activationStudent}
           onSuccess={() => {
             setActivationStudent(null);
-            setSuccessMessage('Account activated successfully! You are now logged in.');
           }}
         />
       )}
+
+      {/* REGISTRATION REQUEST MODAL (Student & Staff) */}
+      <Modal
+        isOpen={showRequestModal}
+        onClose={() => setShowRequestModal(false)}
+        title="Submit Registration Request"
+        subtitle="Requests are routed directly to Master Admin Boomika for verification and activation"
+        maxWidth="lg"
+      >
+        <div className="space-y-4">
+          {/* Switcher Tab */}
+          <div className="flex bg-slate-100 p-1 rounded-2xl">
+            <button
+              type="button"
+              onClick={() => {
+                setRequestType('STUDENT');
+                setRequestErrorMessage(null);
+              }}
+              className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                requestType === 'STUDENT'
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <GraduationCap size={15} />
+              <span>New Student Request</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setRequestType('STAFF');
+                setRequestErrorMessage(null);
+              }}
+              className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                requestType === 'STAFF'
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <Briefcase size={15} />
+              <span>New Faculty Request</span>
+            </button>
+          </div>
+
+          {/* Success Banner */}
+          {requestSuccessMessage && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl text-xs flex items-center gap-2">
+              <CheckCircle2 size={16} className="shrink-0 text-emerald-600" />
+              <span>{requestSuccessMessage}</span>
+            </div>
+          )}
+
+          {/* Error Banner */}
+          {requestErrorMessage && (
+            <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl text-xs flex items-center gap-2">
+              <AlertCircle size={16} className="shrink-0 text-rose-600" />
+              <span>{requestErrorMessage}</span>
+            </div>
+          )}
+
+          {/* Student Request Form */}
+          {requestType === 'STUDENT' && (
+            <form onSubmit={handleSubmitStudentRequest} className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Student Full Name <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={reqStdName}
+                  onChange={(e) => setReqStdName(e.target.value)}
+                  placeholder="e.g. SARAVANAN V"
+                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl uppercase"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Registration Number <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={reqStdRegNo}
+                    onChange={(e) => setReqStdRegNo(e.target.value)}
+                    placeholder="e.g. 927624BEC255"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl font-mono uppercase"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    ECE Section <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={reqStdSection}
+                    onChange={(e) => setReqStdSection(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl font-semibold"
+                  >
+                    <option value="III Year ECE A">III Year ECE A</option>
+                    <option value="III Year ECE B">III Year ECE B</option>
+                    <option value="III Year ECE C">III Year ECE C</option>
+                    <option value="III Year ECE D">III Year ECE D</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Email Address
+                  </label>
+                  <input
+                    type="email"
+                    value={reqStdEmail}
+                    onChange={(e) => setReqStdEmail(e.target.value)}
+                    placeholder="student@college.edu"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Mobile Number <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    value={reqStdMobile}
+                    onChange={(e) => setReqStdMobile(e.target.value)}
+                    placeholder="10-digit mobile number"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2">
+                <Button type="button" variant="ghost" onClick={() => setShowRequestModal(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" variant="primary" isLoading={isSubmittingRequest}>
+                  Submit Student Request
+                </Button>
+              </div>
+            </form>
+          )}
+
+          {/* Staff Request Form */}
+          {requestType === 'STAFF' && (
+            <form onSubmit={handleSubmitStaffRequest} className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Faculty Full Name <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={reqStaffName}
+                  onChange={(e) => setReqStaffName(e.target.value)}
+                  placeholder="e.g. Dr. K. Ramanathan"
+                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Staff ID <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={reqStaffId}
+                    onChange={(e) => setReqStaffId(e.target.value)}
+                    placeholder="e.g. ECE-FAC-04"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl uppercase font-mono"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Department
+                  </label>
+                  <input
+                    type="text"
+                    disabled
+                    value="Electronics & Communication Engineering"
+                    className="w-full px-3 py-2 text-xs bg-slate-100 border border-slate-200 rounded-xl text-slate-600 font-semibold cursor-not-allowed"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Official Email <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={reqStaffEmail}
+                    onChange={(e) => setReqStaffEmail(e.target.value)}
+                    placeholder="ramanathan.ece@college.edu"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Mobile Number <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="tel"
+                    required
+                    value={reqStaffMobile}
+                    onChange={(e) => setReqStaffMobile(e.target.value)}
+                    placeholder="10-digit mobile number"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl font-mono"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Designation <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={reqStaffDesignation}
+                    onChange={(e) => setReqStaffDesignation(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl"
+                  >
+                    <option value="Assistant Professor">Assistant Professor</option>
+                    <option value="Associate Professor">Associate Professor</option>
+                    <option value="Professor">Professor</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    Requested Role <span className="text-rose-500">*</span>
+                  </label>
+                  <select
+                    value={reqStaffRole}
+                    onChange={(e) => setReqStaffRole(e.target.value as any)}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl font-semibold"
+                  >
+                    <option value="STAFF">Faculty Coordinator (STAFF)</option>
+                    <option value="AHOD">Assistant HOD (AHOD)</option>
+                    <option value="HOD">Head of Department (HOD)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Choose Login Password <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={reqStaffPassword}
+                  onChange={(e) => setReqStaffPassword(e.target.value)}
+                  placeholder="Min 6 characters"
+                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl font-mono"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2">
+                <Button type="button" variant="ghost" onClick={() => setShowRequestModal(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" variant="primary" isLoading={isSubmittingRequest}>
+                  Submit Faculty Request
+                </Button>
+              </div>
+            </form>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 };
-

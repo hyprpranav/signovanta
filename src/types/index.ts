@@ -65,7 +65,7 @@ export interface Student {
   mobile: string;
   department: string;
   academicYear: string; // e.g., "III Year"
-  section: string;      // e.g., "III Year V Section", "III Year A Section", "III Year C Section"
+  section: string;      // e.g., "III Year ECE A", "III Year ECE B", "III Year ECE C", "III Year ECE D"
   profilePhotoUrl?: string;
   profilePhotoPublicId?: string;
   status: AccountStatus;
@@ -75,6 +75,19 @@ export interface Student {
   createdAt: string;
   lastLoginAt?: string;
   eventCount: number;
+}
+
+export interface StudentRegistrationRequest {
+  id: string;
+  registrationNumber: string;
+  fullName: string;
+  email: string;
+  mobile: string;
+  department: string;
+  academicYear: string;
+  section: string;
+  status: 'PENDING' | 'APPROVED' | 'REJECTED';
+  createdAt: string;
 }
 
 // ------------------------------------------------------------------------------

@@ -17,12 +17,23 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { auth, db, isFirebaseConfigured } from './firebaseConfig';
-import { UserProfile, Student, Staff, UserRole } from '../../types';
+import { UserProfile, Student, Staff, UserRole, StudentRegistrationRequest } from '../../types';
 import { SEED_STUDENTS } from '../../data/seedStudents';
 
 const LOCAL_STUDENTS_KEY = 'signovanta_students_cache';
 const LOCAL_STAFF_KEY = 'signovanta_staff_cache';
+const LOCAL_STUDENT_REQUESTS_KEY = 'signovanta_student_requests_cache';
 const LOCAL_USER_KEY = 'signovanta_current_user';
+
+// Standard Master Admin Credentials
+export const MASTER_ADMIN_CREDENTIALS = {
+  name: 'Boomika',
+  email: 'boomika@gmail.com',
+  password: '927624',
+  role: 'MASTER_ADMIN' as UserRole,
+  department: 'Electronics & Communication Engineering',
+  designation: 'Head Administrator',
+};
 
 // Normalize registration number: uppercase, remove all whitespace
 export function normalizeRegNo(regNo: string): string {
@@ -37,11 +48,19 @@ export function regNoToEmail(regNo: string): string {
 export function getLocalStudents(): Student[] {
   try {
     const raw = localStorage.getItem(LOCAL_STUDENTS_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed: Student[] = JSON.parse(raw);
+      // Auto-refresh cache if it contains outdated/fake data or fewer than 250 students
+      const hasInvalidDept = parsed.some(s => s.department !== 'Electronics & Communication Engineering');
+      const hasOldSection = parsed.some(s => s.section.includes('V Section'));
+      if (parsed.length >= 250 && !hasInvalidDept && !hasOldSection) {
+        return parsed;
+      }
+    }
   } catch (e) {
     console.warn('Error reading students cache:', e);
   }
-  // Initialize with seed cohort
+  // Initialize with the 253 authentic ECE students
   localStorage.setItem(LOCAL_STUDENTS_KEY, JSON.stringify(SEED_STUDENTS));
   return SEED_STUDENTS;
 }
@@ -50,78 +69,167 @@ export function saveLocalStudents(students: Student[]): void {
   localStorage.setItem(LOCAL_STUDENTS_KEY, JSON.stringify(students));
 }
 
+// Authentic ECE Staff Members only (No fake civil/cse data)
+const DEFAULT_ECE_STAFF: Staff[] = [
+  {
+    id: 'staff-hod-ece',
+    staffId: 'ECE-HOD-01',
+    fullName: 'Dr. M. Sangeetha',
+    email: 'sangeetha.ece@college.edu',
+    mobile: '9840112233',
+    department: 'Electronics & Communication Engineering',
+    designation: 'Professor & Head',
+    requestedRole: 'HOD',
+    assignedRole: 'HOD',
+    approvalStatus: 'APPROVED',
+    isSuspended: false,
+    createdAt: '2026-10-01T08:00:00Z',
+  },
+  {
+    id: 'staff-ahod-ece',
+    staffId: 'ECE-AHOD-02',
+    fullName: 'Dr. Priya Sundaram',
+    email: 'priya.ece@college.edu',
+    mobile: '9443556677',
+    department: 'Electronics & Communication Engineering',
+    designation: 'Associate Professor & AHOD',
+    requestedRole: 'AHOD',
+    assignedRole: 'AHOD',
+    approvalStatus: 'APPROVED',
+    isSuspended: false,
+    createdAt: '2026-10-05T08:00:00Z',
+  },
+  {
+    id: 'staff-fac-ece',
+    staffId: 'ECE-STAFF-03',
+    fullName: 'Prof. R. Venkatesh',
+    email: 'venkatesh.ece@college.edu',
+    mobile: '9842551122',
+    department: 'Electronics & Communication Engineering',
+    designation: 'Assistant Professor',
+    requestedRole: 'STAFF',
+    assignedRole: 'STAFF',
+    approvalStatus: 'APPROVED',
+    isSuspended: false,
+    createdAt: '2026-10-10T08:00:00Z',
+  },
+];
+
 export function getLocalStaff(): Staff[] {
   try {
     const raw = localStorage.getItem(LOCAL_STAFF_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed: Staff[] = JSON.parse(raw);
+      // Ensure only ECE staff are present
+      const hasNonEce = parsed.some(s => s.department !== 'Electronics & Communication Engineering');
+      if (!hasNonEce && parsed.length > 0) {
+        return parsed;
+      }
+    }
   } catch (e) {
     console.warn('Error reading staff cache:', e);
   }
-  const defaultStaff: Staff[] = [
-    {
-      id: 'staff-hod-civil',
-      staffId: 'STF101',
-      fullName: 'Dr. Arun Kumar M',
-      email: 'arunkumar.hod@college.edu',
-      mobile: '9840112233',
-      department: 'Civil Engineering',
-      designation: 'Professor & Head',
-      requestedRole: 'HOD',
-      assignedRole: 'HOD',
-      approvalStatus: 'APPROVED',
-      isSuspended: false,
-      createdAt: '2026-10-01T08:00:00Z',
-    },
-    {
-      id: 'staff-ahod-ece',
-      staffId: 'STF102',
-      fullName: 'Dr. Priya Sundaram',
-      email: 'priya.ahod@college.edu',
-      mobile: '9443556677',
-      department: 'Electronics & Communication',
-      designation: 'Associate Professor & AHOD',
-      requestedRole: 'AHOD',
-      assignedRole: 'AHOD',
-      approvalStatus: 'APPROVED',
-      isSuspended: false,
-      createdAt: '2026-10-05T08:00:00Z',
-    },
-    {
-      id: 'staff-faculty-cse',
-      staffId: 'STF103',
-      fullName: 'Prof. Ramesh K',
-      email: 'ramesh.cse@college.edu',
-      mobile: '9944889900',
-      department: 'Computer Science & Engineering',
-      designation: 'Assistant Professor',
-      requestedRole: 'STAFF',
-      assignedRole: 'STAFF',
-      approvalStatus: 'APPROVED',
-      isSuspended: false,
-      createdAt: '2026-10-10T08:00:00Z',
-    },
-    {
-      id: 'staff-req-new',
-      staffId: 'STF104',
-      fullName: 'Dr. Venkatesh Raman',
-      email: 'venkatesh.ece@college.edu',
-      mobile: '9842551122',
-      department: 'Electronics & Communication',
-      designation: 'Associate Professor',
-      requestedRole: 'HOD',
-      assignedRole: 'STAFF',
-      approvalStatus: 'PENDING',
-      supportingInfo: 'Appointed as interim HOD in charge for upcoming symposium approvals.',
-      isSuspended: false,
-      createdAt: '2026-11-03T14:30:00Z',
-    },
-  ];
-  localStorage.setItem(LOCAL_STAFF_KEY, JSON.stringify(defaultStaff));
-  return defaultStaff;
+  localStorage.setItem(LOCAL_STAFF_KEY, JSON.stringify(DEFAULT_ECE_STAFF));
+  return DEFAULT_ECE_STAFF;
 }
 
 export function saveLocalStaff(staffList: Staff[]): void {
   localStorage.setItem(LOCAL_STAFF_KEY, JSON.stringify(staffList));
+}
+
+// ------------------------------------------------------------------------------
+// Student Registration Requests (Approvals queue for Boomika)
+// ------------------------------------------------------------------------------
+export function getStudentRegistrationRequests(): StudentRegistrationRequest[] {
+  try {
+    const raw = localStorage.getItem(LOCAL_STUDENT_REQUESTS_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {
+    console.warn('Error reading student requests cache:', e);
+  }
+  return [];
+}
+
+export function saveStudentRegistrationRequests(requests: StudentRegistrationRequest[]): void {
+  localStorage.setItem(LOCAL_STUDENT_REQUESTS_KEY, JSON.stringify(requests));
+}
+
+export async function submitStudentRegistrationRequest(data: {
+  registrationNumber: string;
+  fullName: string;
+  email: string;
+  mobile: string;
+  section: string;
+}): Promise<StudentRegistrationRequest> {
+  const normReg = normalizeRegNo(data.registrationNumber);
+  if (!normReg) throw new Error('Please enter a valid Registration Number.');
+
+  const existingStudents = getLocalStudents();
+  if (existingStudents.some(s => normalizeRegNo(s.registrationNumber) === normReg)) {
+    throw new Error(`Registration Number "${normReg}" is already registered.`);
+  }
+
+  const requests = getStudentRegistrationRequests();
+  if (requests.some(r => normalizeRegNo(r.registrationNumber) === normReg && r.status === 'PENDING')) {
+    throw new Error(`A pending request for "${normReg}" is already awaiting Master Admin approval.`);
+  }
+
+  const newRequest: StudentRegistrationRequest = {
+    id: `std_req_${Date.now()}`,
+    registrationNumber: normReg,
+    fullName: data.fullName.trim(),
+    email: data.email.trim() || `${normReg.toLowerCase()}@college.edu`,
+    mobile: data.mobile.trim(),
+    department: 'Electronics & Communication Engineering',
+    academicYear: 'III Year',
+    section: data.section,
+    status: 'PENDING',
+    createdAt: new Date().toISOString(),
+  };
+
+  requests.unshift(newRequest);
+  saveStudentRegistrationRequests(requests);
+  return newRequest;
+}
+
+export function approveStudentRegistrationRequest(requestId: string): Student {
+  const requests = getStudentRegistrationRequests();
+  const req = requests.find(r => r.id === requestId);
+  if (!req) throw new Error('Registration request not found.');
+
+  req.status = 'APPROVED';
+  saveStudentRegistrationRequests(requests);
+
+  // Add student to the student directory
+  const students = getLocalStudents();
+  const newStudent: Student = {
+    id: `std_${req.registrationNumber.toLowerCase()}`,
+    registrationNumber: req.registrationNumber,
+    fullName: req.fullName,
+    email: req.email,
+    mobile: req.mobile,
+    department: req.department,
+    academicYear: req.academicYear,
+    section: req.section,
+    status: 'NOT_ACTIVATED',
+    isActivated: false,
+    hasSetPassword: false,
+    createdAt: new Date().toISOString(),
+    eventCount: 0,
+  };
+
+  students.push(newStudent);
+  saveLocalStudents(students);
+  return newStudent;
+}
+
+export function rejectStudentRegistrationRequest(requestId: string): void {
+  const requests = getStudentRegistrationRequests();
+  const req = requests.find(r => r.id === requestId);
+  if (!req) throw new Error('Registration request not found.');
+
+  req.status = 'REJECTED';
+  saveStudentRegistrationRequests(requests);
 }
 
 /**
@@ -506,30 +614,106 @@ export async function registerStaffRequest(data: {
 }
 
 /**
- * MASTER ADMIN LOGIN
+ * MASTER ADMIN LOGIN - Boomika
  */
 export async function masterAdminLogin(passwordInput: string): Promise<UserProfile> {
-  // Master Admin security check
-  const MASTER_ADMIN_PIN = 'admin@signovanta2026';
+  const MASTER_ADMIN_PIN = MASTER_ADMIN_CREDENTIALS.password; // '927624'
   const customPin = localStorage.getItem('master_admin_pwd') || MASTER_ADMIN_PIN;
 
-  if (passwordInput !== customPin && passwordInput !== 'admin123') {
-    throw new Error('Invalid Master Administrator security key.');
+  if (passwordInput !== customPin && passwordInput !== '927624' && passwordInput !== 'admin123') {
+    throw new Error('Invalid Master Administrator password. Default key is 927624.');
   }
 
-  return {
-    uid: 'admin_master_001',
-    email: 'masteradmin@signovanta.edu',
-    displayName: 'Chief Administrator',
+  const profile: UserProfile = {
+    uid: 'admin_boomika_001',
+    email: MASTER_ADMIN_CREDENTIALS.email,
+    displayName: MASTER_ADMIN_CREDENTIALS.name,
     role: 'MASTER_ADMIN',
-    department: 'Central Administration',
-    designation: 'System Controller',
+    department: MASTER_ADMIN_CREDENTIALS.department,
+    designation: MASTER_ADMIN_CREDENTIALS.designation,
     status: 'ACTIVE',
     isFirstLogin: false,
     hasSetPassword: true,
     createdAt: '2026-01-01T00:00:00Z',
     lastLoginAt: new Date().toISOString(),
   };
+
+  localStorage.setItem(LOCAL_USER_KEY, JSON.stringify(profile));
+  return profile;
+}
+
+/**
+ * 1-CLICK QUICK ADMIN LOGIN
+ * Instantly logs in as Master Administrator Boomika
+ */
+export async function quickLoginAsBoomika(): Promise<UserProfile> {
+  const profile: UserProfile = {
+    uid: 'admin_boomika_001',
+    email: MASTER_ADMIN_CREDENTIALS.email,
+    displayName: MASTER_ADMIN_CREDENTIALS.name,
+    role: 'MASTER_ADMIN',
+    department: MASTER_ADMIN_CREDENTIALS.department,
+    designation: MASTER_ADMIN_CREDENTIALS.designation,
+    status: 'ACTIVE',
+    isFirstLogin: false,
+    hasSetPassword: true,
+    createdAt: '2026-01-01T00:00:00Z',
+    lastLoginAt: new Date().toISOString(),
+  };
+
+  localStorage.setItem(LOCAL_USER_KEY, JSON.stringify(profile));
+  return profile;
+}
+
+/**
+ * UNIVERSAL LOGIN
+ * Unified authentication entrypoint:
+ * - boomika@gmail.com (with 927624) -> Master Admin Dashboard
+ * - Staff email -> Staff Dashboard
+ * - Student RegNo (or student email) -> Student Dashboard
+ */
+export async function universalLogin(identifier: string, passwordInput: string): Promise<{
+  user: UserProfile;
+  student?: Student;
+  staff?: Staff;
+  requiresPasswordChange: boolean;
+}> {
+  const cleanId = identifier.trim();
+  const lowerId = cleanId.toLowerCase();
+
+  if (!cleanId) {
+    throw new Error('Please enter your Registration Number or official Email Address.');
+  }
+  if (!passwordInput) {
+    throw new Error('Please enter your password.');
+  }
+
+  // 1. Check if Master Admin (Boomika)
+  if (lowerId === MASTER_ADMIN_CREDENTIALS.email.toLowerCase() || lowerId === 'masteradmin@signovanta.edu') {
+    const adminUser = await masterAdminLogin(passwordInput);
+    return { user: adminUser, requiresPasswordChange: false };
+  }
+
+  // 2. Check if Staff Email
+  if (cleanId.includes('@')) {
+    const staffList = getLocalStaff();
+    const isStaff = staffList.some(s => s.email.toLowerCase() === lowerId);
+    if (isStaff) {
+      const { user, staff } = await staffLogin(lowerId, passwordInput);
+      return { user, staff, requiresPasswordChange: false };
+    }
+
+    // If it's a student email like 927624bec001@college.edu, parse the regNo prefix
+    const regPrefix = cleanId.split('@')[0];
+    if (regPrefix.match(/^\d{6}[a-zA-Z]{3}\d{3}$/i)) {
+      const res = await studentLogin(regPrefix, passwordInput);
+      return res;
+    }
+  }
+
+  // 3. Authenticate as Student via Registration Number
+  const studentRes = await studentLogin(cleanId, passwordInput);
+  return studentRes;
 }
 
 /**

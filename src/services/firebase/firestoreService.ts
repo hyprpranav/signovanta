@@ -18,18 +18,18 @@ const NOTIFICATIONS_KEY = 'signovanta_notifications_cache';
 const CATEGORIES_KEY = 'signovanta_categories_cache';
 const SECTIONS_KEY = 'signovanta_sections_cache';
 
-// Helper to seed initial applications for demonstration
+// Helper to seed initial applications for demonstration (strictly ECE students only)
 function getInitialApplications(): EventApplication[] {
   return [
     {
       id: 'app-2026-001',
       applicationNumber: 'SIG-2026-0001',
-      studentId: 'std-927624bec014',
-      studentRegNo: '927624BEC014',
-      studentName: 'Ananya S',
-      department: 'Electronics & Communication',
+      studentId: 'std_927624bec001',
+      studentRegNo: '927624BEC001',
+      studentName: 'AADITYA R',
+      department: 'Electronics & Communication Engineering',
       academicYear: 'III Year',
-      section: 'III Year V Section',
+      section: 'III Year ECE A',
       eventName: 'Smart India Hackathon 2026',
       eventCategory: 'Hackathon',
       organizerName: 'AICTE & MoE',
@@ -56,31 +56,31 @@ function getInitialApplications(): EventApplication[] {
     {
       id: 'app-2026-002',
       applicationNumber: 'SIG-2026-0002',
-      studentId: 'std-927624bce003',
-      studentRegNo: '927624BCE003',
-      studentName: 'Akash Rajendran',
-      department: 'Civil Engineering',
+      studentId: 'std_927624bec190',
+      studentRegNo: '927624BEC190',
+      studentName: 'SANJITH J P',
+      department: 'Electronics & Communication Engineering',
       academicYear: 'III Year',
-      section: 'III Year C Section',
-      eventName: 'National Concrete Design Championship',
+      section: 'III Year ECE D',
+      eventName: 'IEEE National Circuit Design Expo',
       eventCategory: 'Technical Competition',
-      organizerName: 'Indian Concrete Institute',
+      organizerName: 'IEEE Student Branch',
       institutionName: 'NIT Trichy',
       eventLocation: 'Trichy, Tamil Nadu',
       startDate: '2026-10-15',
       endDate: '2026-10-16',
       eventMode: 'OFFLINE',
-      eventDescription: 'High-strength geopolymer concrete mix design optimization contest.',
+      eventDescription: 'FPGA embedded controller and VLSI high-speed signal processing showcase.',
       participationType: 'INDIVIDUAL',
-      facultyCoordinator: 'Dr. Arun Kumar M',
+      facultyCoordinator: 'Dr. M. Sangeetha',
       status: 'COMPLETED',
       progressPercent: 100,
-      preApprovedBy: 'staff-hod-civil',
-      preApprovedByName: 'Dr. Arun Kumar M',
+      preApprovedBy: 'staff-hod-ece',
+      preApprovedByName: 'Dr. M. Sangeetha',
       preApprovedRole: 'HOD',
       preApprovedAt: '2026-10-10T09:00:00Z',
-      preApprovalRemarks: 'Approved for institutional representation.',
-      actualParticipationDetails: 'Successfully tested concrete cubes and presented compressive stress graphs.',
+      preApprovalRemarks: 'Approved for institutional representation with FPGA hardware kit.',
+      actualParticipationDetails: 'Successfully presented FPGA architecture and demonstrated real-time oscilloscope testing.',
       actualAttendanceMarked: true,
       prizeWon: true,
       prizeCategory: '1st Prize (Gold Trophy)',
@@ -88,37 +88,10 @@ function getInitialApplications(): EventApplication[] {
       winnerCertUrl: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=600&auto=format&fit=crop&q=80',
       participationCertUrl: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=600&auto=format&fit=crop&q=80',
       completedAt: '2026-10-20T11:45:00Z',
-      completedBy: 'staff-hod-civil',
-      completedByName: 'Dr. Arun Kumar M',
+      completedBy: 'staff-hod-ece',
+      completedByName: 'Dr. M. Sangeetha',
       createdAt: '2026-10-08T11:00:00Z',
       updatedAt: '2026-10-20T11:45:00Z',
-    },
-    {
-      id: 'app-2026-003',
-      applicationNumber: 'SIG-2026-0003',
-      studentId: 'std-927624bcs008',
-      studentRegNo: '927624BCS008',
-      studentName: 'Aravind Swaminathan',
-      department: 'Computer Science & Engineering',
-      academicYear: 'III Year',
-      section: 'III Year A Section',
-      eventName: 'Cloud Native & GenAI Summit 2026',
-      eventCategory: 'Symposium',
-      organizerName: 'Google Cloud Developer Group',
-      institutionName: 'Bengaluru Tech Park',
-      eventLocation: 'Bengaluru, Karnataka',
-      startDate: '2026-11-28',
-      endDate: '2026-11-29',
-      eventMode: 'HYBRID' as any,
-      eventDescription: 'Paper presentation on LLM distillation on resource-constrained microcontrollers.',
-      participationType: 'TEAM',
-      teamId: 'team-2026-001',
-      teamName: 'NeuralCoders',
-      facultyCoordinator: 'Prof. Ramesh K',
-      status: 'UNDER_REVIEW',
-      progressPercent: 0,
-      createdAt: '2026-11-04T08:15:00Z',
-      updatedAt: '2026-11-04T08:15:00Z',
     },
   ];
 }
@@ -129,7 +102,14 @@ function getInitialApplications(): EventApplication[] {
 export function getAllApplications(): EventApplication[] {
   try {
     const raw = localStorage.getItem(APPLICATIONS_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed: EventApplication[] = JSON.parse(raw);
+      // Auto-flush non-ECE legacy demo applications
+      const hasNonEce = parsed.some(a => a.department !== 'Electronics & Communication Engineering');
+      if (!hasNonEce && parsed.length > 0) {
+        return parsed;
+      }
+    }
   } catch (e) {
     console.warn('Error reading applications:', e);
   }
@@ -427,41 +407,47 @@ export function completeEventApplication(
 export function getAllTeams(): Team[] {
   try {
     const raw = localStorage.getItem(TEAMS_KEY);
-    if (raw) return JSON.parse(raw);
+    if (raw) {
+      const parsed: Team[] = JSON.parse(raw);
+      const hasNonEce = parsed.some(t => t.members.some(m => m.department !== 'Electronics & Communication Engineering'));
+      if (!hasNonEce && parsed.length > 0) {
+        return parsed;
+      }
+    }
   } catch (e) {
     console.warn('Error reading teams:', e);
   }
   const defaultTeam: Team = {
     id: 'team-2026-001',
-    teamName: 'NeuralCoders',
-    eventApplicationId: 'app-2026-003',
-    leaderStudentId: 'std-927624bcs008',
-    leaderRegNo: '927624BCS008',
-    leaderName: 'Aravind Swaminathan',
-    leaderUid: 'uid_927624BCS008',
+    teamName: 'CircuitCrafters',
+    eventApplicationId: 'app-2026-001',
+    leaderStudentId: 'std_927624bec001',
+    leaderRegNo: '927624BEC001',
+    leaderName: 'AADITYA R',
+    leaderUid: 'uid_927624BEC001',
     maxMembers: 4,
     members: [
       {
-        studentId: 'std-927624bcs008',
-        registrationNumber: '927624BCS008',
-        fullName: 'Aravind Swaminathan',
-        department: 'Computer Science & Engineering',
+        studentId: 'std_927624bec001',
+        registrationNumber: '927624BEC001',
+        fullName: 'AADITYA R',
+        department: 'Electronics & Communication Engineering',
         academicYear: 'III Year',
-        section: 'III Year A Section',
+        section: 'III Year ECE A',
         roleInTeam: 'LEADER',
         confirmationStatus: 'CONFIRMED',
         confirmedAt: '2026-11-04T08:15:00Z',
         invitedAt: '2026-11-04T08:15:00Z',
       },
       {
-        studentId: 'std-927624bec014',
-        registrationNumber: '927624BEC014',
-        fullName: 'Ananya S',
-        department: 'Electronics & Communication',
+        studentId: 'std_927624bec002',
+        registrationNumber: '927624BEC002',
+        fullName: 'AAKASH V',
+        department: 'Electronics & Communication Engineering',
         academicYear: 'III Year',
-        section: 'III Year V Section',
+        section: 'III Year ECE A',
         roleInTeam: 'MEMBER',
-        confirmationStatus: 'PENDING_CONFIRMATION',
+        confirmationStatus: 'CONFIRMED',
         invitedAt: '2026-11-04T08:15:00Z',
       },
     ],
