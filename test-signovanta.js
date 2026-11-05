@@ -105,5 +105,45 @@ assert.strictEqual(computeProgress('CERTIFICATE_SUBMITTED'), 0); // Stays at pre
 assert.strictEqual(computeProgress('COMPLETED'), 100);
 console.log('✓ Test 4 Passed: 50% Pre-Approval and 100% Verified Completion milestone engine verified.');
 
-console.log('ALL 4 AUTOMATED TEST SUITES PASSED CLEANLY!');
+// 5. Test Firestore Document Sanitization (Zero-Error undefined field prevention)
+function sanitizeForFirestore(data) {
+  if (data === null || data === undefined) return data;
+  if (Array.isArray(data)) {
+    return data.filter(item => item !== undefined).map(item => sanitizeForFirestore(item));
+  }
+  if (typeof data === 'object' && !(data instanceof Date)) {
+    const cleaned = {};
+    for (const [key, val] of Object.entries(data)) {
+      if (val !== undefined) {
+        cleaned[key] = sanitizeForFirestore(val);
+      }
+    }
+    return cleaned;
+  }
+  return data;
+}
+
+const uncleanedDoc = {
+  eventName: 'National ECE Circuit Hackathon',
+  participationType: 'INDIVIDUAL',
+  teamName: undefined,
+  teamSize: undefined,
+  teamMembers: undefined,
+  nested: {
+    valid: 'data',
+    removed: undefined,
+  },
+  list: ['ok', undefined, 'item'],
+};
+
+const cleanedDoc = sanitizeForFirestore(uncleanedDoc);
+assert.strictEqual('teamName' in cleanedDoc, false);
+assert.strictEqual('teamSize' in cleanedDoc, false);
+assert.strictEqual('teamMembers' in cleanedDoc, false);
+assert.strictEqual('removed' in cleanedDoc.nested, false);
+assert.strictEqual(cleanedDoc.nested.valid, 'data');
+assert.deepStrictEqual(cleanedDoc.list, ['ok', 'item']);
+console.log('✓ Test 5 Passed: Zero-Error Firestore Sanitization eliminates all undefined fields completely.');
+
+console.log('ALL 5 AUTOMATED TEST SUITES PASSED CLEANLY!');
 

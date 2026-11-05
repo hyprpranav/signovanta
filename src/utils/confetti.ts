@@ -45,3 +45,4 @@ export function fireCelebrationConfetti(): void {
     console.warn('Confetti animation error:', err);
   }
 }
+

@@ -444,3 +444,4 @@ export const EventParticipationAnalytics: React.FC<EventParticipationAnalyticsPr
     </div>
   );
 };
+

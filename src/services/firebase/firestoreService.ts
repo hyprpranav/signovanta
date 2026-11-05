@@ -20,10 +20,41 @@ const NOTIFICATIONS_KEY = 'signovanta_notifications_cache';
 const CATEGORIES_KEY = 'signovanta_categories_cache';
 const SECTIONS_KEY = 'signovanta_sections_cache';
 
+/**
+ * Recursively sanitize objects for Firestore:
+ * Strips out any properties with `undefined` values, which Firestore rejects with:
+ * "Unsupported field value: undefined"
+ */
+export function sanitizeForFirestore<T>(data: T): T {
+  if (data === null || data === undefined) {
+    return data;
+  }
+  if (Array.isArray(data)) {
+    return data
+      .filter(item => item !== undefined)
+      .map(item => sanitizeForFirestore(item)) as unknown as T;
+  }
+  if (typeof data === 'object' && !(data instanceof Date)) {
+    const cleaned: Record<string, any> = {};
+    for (const [key, val] of Object.entries(data as Record<string, any>)) {
+      if (val !== undefined) {
+        cleaned[key] = sanitizeForFirestore(val);
+      }
+    }
+    return cleaned as T;
+  }
+  return data;
+}
+
 function mirrorToFirebase(collectionName: string, id: string, data: object): void {
   if (!isFirebaseConfigured() || !db) return;
-  void setDoc(doc(db, collectionName, id), { ...data, updatedAt: serverTimestamp() }, { merge: true })
-    .catch(error => console.error(`[SIGNOVANTA] Failed to save ${collectionName}/${id} in Firebase`, error));
+  try {
+    const cleanData = sanitizeForFirestore(data);
+    void setDoc(doc(db, collectionName, id), { ...cleanData, updatedAt: serverTimestamp() }, { merge: true })
+      .catch(error => console.warn(`[SIGNOVANTA] Failed to save ${collectionName}/${id} in Firebase:`, error));
+  } catch (error) {
+    console.warn(`[SIGNOVANTA] Error mirroring ${collectionName}/${id} to Firebase:`, error);
+  }
 }
 
 // Helper to seed initial applications for demonstration (strictly ECE students only)
@@ -183,8 +214,10 @@ export function createApplication(
   const year = new Date().getFullYear();
   const applicationNumber = `SIG-${year}-${String(count).padStart(4, '0')}`;
 
+  const cleanData = sanitizeForFirestore(data);
+
   const newApp: EventApplication = {
-    ...data,
+    ...cleanData,
     id: `app_${Date.now()}`,
     applicationNumber,
     status: isDraft ? 'DRAFT' : 'SUBMITTED',
@@ -193,22 +226,23 @@ export function createApplication(
     updatedAt: new Date().toISOString(),
   };
 
-  all.unshift(newApp);
+  const finalApp = sanitizeForFirestore(newApp);
+  all.unshift(finalApp);
   saveAllApplications(all);
-  mirrorToFirebase('eventApplications', newApp.id, newApp);
+  mirrorToFirebase('eventApplications', finalApp.id, finalApp);
 
   // Create audit log
   createApprovalLog({
-    applicationId: newApp.id,
-    applicationNumber: newApp.applicationNumber,
+    applicationId: finalApp.id,
+    applicationNumber: finalApp.applicationNumber,
     action: 'SUBMITTED',
-    performedByUid: newApp.studentId,
-    performedByName: newApp.studentName,
+    performedByUid: finalApp.studentId,
+    performedByName: finalApp.studentName,
     performedByRole: 'STUDENT',
     remarks: isDraft ? 'Application saved as draft' : 'New event application submitted for verification',
   });
 
-  return newApp;
+  return finalApp;
 }
 
 export function updateApplication(
@@ -219,16 +253,19 @@ export function updateApplication(
   const idx = all.findIndex(a => a.id === id);
   if (idx === -1) throw new Error('Application not found');
 
+  const cleanUpdates = sanitizeForFirestore(updates);
+
   const updated: EventApplication = {
     ...all[idx],
-    ...updates,
+    ...cleanUpdates,
     updatedAt: new Date().toISOString(),
   };
 
-  all[idx] = updated;
+  const finalApp = sanitizeForFirestore(updated);
+  all[idx] = finalApp;
   saveAllApplications(all);
-  mirrorToFirebase('eventApplications', updated.id, updated);
-  return updated;
+  mirrorToFirebase('eventApplications', finalApp.id, finalApp);
+  return finalApp;
 }
 
 export function editCompletedApplication(

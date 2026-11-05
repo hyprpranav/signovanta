@@ -99,16 +99,23 @@ export const PostEventSubmissionModal: React.FC<PostEventSubmissionModalProps> =
 
     setIsLoading(true);
     try {
-      const updated = submitPostEventDocuments(application.id, {
+      const payload: any = {
         actualParticipationDetails: actualParticipationDetails.trim(),
         actualAttendanceMarked,
         prizeWon,
-        prizeCategory: prizeWon ? prizeCategory : undefined,
-        prizeName: prizeWon && prizeCategory === 'Other' ? prizeName.trim() : undefined,
         achievementDescription: achievementDescription.trim(),
         participationCertUrl,
-        winnerCertUrl: prizeWon ? winnerCertUrl : undefined,
-      });
+      };
+
+      if (prizeWon) {
+        payload.prizeCategory = prizeCategory;
+        if (winnerCertUrl) payload.winnerCertUrl = winnerCertUrl;
+        if (prizeCategory === 'Other' && prizeName.trim()) {
+          payload.prizeName = prizeName.trim();
+        }
+      }
+
+      const updated = submitPostEventDocuments(application.id, payload);
 
       onSuccess(updated);
       onClose();

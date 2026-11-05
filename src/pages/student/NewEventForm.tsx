@@ -127,7 +127,7 @@ export const NewEventForm: React.FC<NewEventFormProps> = ({ onBack, onSuccess })
       return;
     }
     if (!browserUrl && !isDraft) {
-      setError('Browser document is mandatory for the first event submission.');
+      setError('Event brochure or proof of registration document is mandatory for event submission.');
       return;
     }
 
@@ -135,38 +135,49 @@ export const NewEventForm: React.FC<NewEventFormProps> = ({ onBack, onSuccess })
     else setIsSubmitting(true);
 
     try {
-      const newApp = createApplication(
-        {
-          studentId: studentData.id,
-          studentRegNo: studentData.registrationNumber,
-          studentName: studentData.fullName,
-          department: studentData.department,
-          academicYear: studentData.academicYear,
-          section: studentData.section,
-          eventName: eventName.trim(),
-          eventCategory,
-          organizerName: organizerName.trim(),
-          institutionName: institutionName.trim(),
-          eventLocation: eventLocation.trim(),
-          startDate,
-          endDate,
-          eventMode,
-          eventWebsite: eventWebsite.trim(),
-          registrationLink: registrationLink.trim(),
-          eventDescription: eventDescription.trim(),
-          parentGuardianName: parentGuardianName.trim() || undefined,
-          parentGuardianMobile: parentGuardianMobile.trim() || undefined,
-          guideName: guideName.trim() || undefined,
-          participationType,
-          teamName: participationType === 'TEAM' ? teamName.trim() : undefined,
-          teamSize: participationType === 'TEAM' ? teamSize : undefined,
-          teamMembers: participationType === 'TEAM' ? teamMembers : undefined,
-          facultyCoordinator: guideName.trim(),
-          browserUrl,
-          status: isDraft ? 'DRAFT' : 'SUBMITTED',
-        },
-        isDraft
-      );
+      const payload: any = {
+        studentId: studentData.id,
+        studentRegNo: studentData.registrationNumber,
+        studentName: studentData.fullName,
+        department: studentData.department,
+        academicYear: studentData.academicYear,
+        section: studentData.section,
+        eventName: eventName.trim(),
+        eventCategory,
+        organizerName: organizerName.trim(),
+        institutionName: institutionName.trim(),
+        eventLocation: eventLocation.trim(),
+        startDate,
+        endDate,
+        eventMode,
+        eventWebsite: eventWebsite.trim() || '',
+        registrationLink: registrationLink.trim() || '',
+        eventDescription: eventDescription.trim() || '',
+        participationType,
+        facultyCoordinator: guideName.trim() || 'ECE Department Faculty',
+        status: isDraft ? 'DRAFT' : 'SUBMITTED',
+      };
+
+      if (browserUrl) {
+        payload.browserUrl = browserUrl;
+        payload.brochureUrl = browserUrl;
+      }
+      if (parentGuardianName.trim()) {
+        payload.parentGuardianName = parentGuardianName.trim();
+      }
+      if (parentGuardianMobile.trim()) {
+        payload.parentGuardianMobile = parentGuardianMobile.trim();
+      }
+      if (guideName.trim()) {
+        payload.guideName = guideName.trim();
+      }
+      if (participationType === 'TEAM') {
+        if (teamName.trim()) payload.teamName = teamName.trim();
+        if (teamSize) payload.teamSize = teamSize;
+        if (teamMembers && teamMembers.length > 0) payload.teamMembers = teamMembers;
+      }
+
+      const newApp = createApplication(payload, isDraft);
 
       onSuccess(newApp);
     } catch (err: any) {
@@ -536,23 +547,47 @@ export const NewEventForm: React.FC<NewEventFormProps> = ({ onBack, onSuccess })
             </div>
           </div>
 
-        {/* Browser Proof */}
+        {/* Event Brochure / Registration Proof */}
         <div className="space-y-4 pt-2 border-t border-slate-100">
           <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-            5. Browser Proof
+            5. Event Brochure & Registration Proof
           </h3>
 
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-1.5">
-              Browser / Proof of Registration (Image or PDF, max 5MB) <span className="text-rose-500">*</span>
+              Official Brochure / Registration Proof (Image or PDF, max 5MB) <span className="text-rose-500">*</span>
             </label>
             <label className="block cursor-pointer">
-              <div className="flex items-center justify-center gap-2 px-4 py-3 bg-slate-50 hover:bg-slate-100 border border-dashed border-slate-300 rounded-2xl text-xs font-bold text-slate-700">
-                <UploadCloud size={18} />
-                <span>{browserUrl ? 'Browser document uploaded (Click to change)' : 'Upload browser document'}</span>
+              <div className={`flex items-center justify-center gap-2 px-4 py-3 border border-dashed rounded-2xl text-xs font-bold transition-all ${
+                browserUrl
+                  ? 'bg-emerald-50 border-emerald-300 text-emerald-800'
+                  : 'bg-slate-50 hover:bg-slate-100 border-slate-300 text-slate-700'
+              }`}>
+                <UploadCloud size={18} className={browserUrl ? 'text-emerald-600' : 'text-slate-500'} />
+                <span>
+                  {uploadingBrochure
+                    ? `Uploading document (${uploadProgress}%)...`
+                    : browserUrl
+                    ? '✓ Brochure Document Attached (Click to Replace)'
+                    : 'Upload Event Brochure / Registration Document'}
+                </span>
               </div>
               <input type="file" accept="image/*,application/pdf" onChange={handleBrowserUpload} disabled={uploadingBrochure} className="hidden" />
             </label>
+
+            {browserUrl && (
+              <div className="mt-2 flex items-center justify-between p-2.5 bg-emerald-50/60 border border-emerald-200 rounded-xl text-xs text-emerald-900">
+                <span className="font-semibold truncate max-w-xs">Document ready for submission</span>
+                <a
+                  href={browserUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-bold underline text-emerald-700 hover:text-emerald-900 shrink-0 text-[11px]"
+                >
+                  Preview Document ↗
+                </a>
+              </div>
+            )}
           </div>
         </div>
 

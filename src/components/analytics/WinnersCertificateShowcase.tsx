@@ -236,3 +236,4 @@ export const WinnersCertificateShowcase: React.FC<WinnersCertificateShowcaseProp
     </div>
   );
 };
+
