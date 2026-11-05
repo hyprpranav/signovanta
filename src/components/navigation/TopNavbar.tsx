@@ -33,6 +33,11 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
   const notifications = currentUser ? getUserNotifications(currentUser.uid) : [];
   const unreadCount = notifications.filter(n => !n.isRead).length;
 
+  const profileImage =
+    studentData?.profilePhotoUrl ||
+    currentUser?.profilePhotoUrl ||
+    staffData?.profilePhotoUrl;
+
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-4 sm:px-6 py-2.5">
       <div className="w-full flex items-center justify-between gap-3">
@@ -94,35 +99,36 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
             )}
           </button>
 
-          {/* Logged in User Badge & Role Display */}
+          {/* Logged in User Badge & Profile Display (Mobile & Desktop) */}
           {currentUser && (
             <div className="relative">
               <button
                 onClick={() => setIsProfileOpen(!isProfileOpen)}
-                className="md:hidden flex items-center gap-2 p-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl transition-all cursor-pointer text-left"
+                className="flex items-center gap-2 p-1 bg-slate-50 hover:bg-slate-100 border border-slate-200/90 rounded-2xl transition-all cursor-pointer text-left"
+                aria-label="User Profile Menu"
               >
-                <div className="w-7 h-7 rounded-lg bg-slate-200 overflow-hidden shrink-0 flex items-center justify-center">
-                  {currentUser.profilePhotoUrl ? (
+                <div className="w-8 h-8 rounded-full bg-slate-900 text-white overflow-hidden shrink-0 flex items-center justify-center font-bold text-xs ring-2 ring-blue-500/20 shadow-xs">
+                  {profileImage ? (
                     <img
-                      src={currentUser.profilePhotoUrl}
+                      src={profileImage}
                       alt={currentUser.displayName}
                       className="w-full h-full object-cover"
                     />
                   ) : (
-                    <User size={16} className="text-slate-500" />
+                    <span>
+                      {currentUser.displayName ? currentUser.displayName.charAt(0).toUpperCase() : 'U'}
+                    </span>
                   )}
                 </div>
-                <div className="hidden">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-bold text-slate-900 leading-none">
-                      {currentUser.displayName}
-                    </span>
-                  </div>
-                  <div className="mt-1">
-                    <Badge role={currentUser.role} size="sm" />
-                  </div>
+                <div className="hidden sm:block pr-1">
+                  <span className="text-xs font-bold text-slate-900 leading-none block truncate max-w-[120px]">
+                    {currentUser.displayName}
+                  </span>
+                  <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block mt-0.5">
+                    {currentUser.role === 'STUDENT' ? (studentData?.section || 'ECE') : currentUser.role}
+                  </span>
                 </div>
-                <ChevronDown size={14} className="text-slate-400" />
+                <ChevronDown size={14} className="text-slate-400 hidden sm:block" />
               </button>
 
               {/* Profile Dropdown */}

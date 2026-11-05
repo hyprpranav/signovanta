@@ -40,10 +40,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   isOpen,
   onClose,
 }) => {
-  const { currentUser, logout } = useAuth();
+  const { currentUser, studentData, staffData, logout } = useAuth();
   if (!currentUser) return null;
 
   const role = currentUser.role;
+  const profileImage = studentData?.profilePhotoUrl || currentUser.profilePhotoUrl || staffData?.profilePhotoUrl;
   const [notificationVersion, setNotificationVersion] = useState(0);
 
   useEffect(() => {
@@ -178,14 +179,14 @@ export const Sidebar: React.FC<SidebarProps> = ({
           })}
         </nav>
 
-        {/* Bottom Signout */}
+        {/* Bottom Profile and Signout */}
         <div className="p-3 border-t border-slate-100 bg-white">
           <div className="flex items-center gap-2.5 px-2 py-2 mb-2">
-            <div className="w-9 h-9 rounded-full bg-slate-900 text-white flex items-center justify-center font-bold text-sm shrink-0 overflow-hidden">
-              {currentUser.profilePhotoUrl ? (
-                <img src={currentUser.profilePhotoUrl} alt="" className="w-full h-full object-cover" />
+            <div className="w-10 h-10 rounded-full bg-slate-900 text-white flex items-center justify-center font-bold text-sm shrink-0 overflow-hidden ring-2 ring-slate-200/80 shadow-xs">
+              {profileImage ? (
+                <img src={profileImage} alt={currentUser.displayName} className="w-full h-full object-cover" />
               ) : (
-                currentUser.displayName.charAt(0).toUpperCase()
+                currentUser.displayName ? currentUser.displayName.charAt(0).toUpperCase() : 'U'
               )}
             </div>
             <div className="min-w-0">

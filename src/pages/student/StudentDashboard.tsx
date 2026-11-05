@@ -22,7 +22,7 @@ interface StudentDashboardProps {
   onNewEvent: () => void;
   onViewApplications: () => void;
   onSelectApplication: (app: EventApplication) => void;
-  onOpenTeamFormation: () => void;
+  onOpenTeamFormation?: () => void;
   onEditDraft?: (app: EventApplication) => void;
 }
 
@@ -30,7 +30,6 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   onNewEvent,
   onViewApplications,
   onSelectApplication,
-  onOpenTeamFormation,
   onEditDraft,
 }) => {
   const { currentUser, studentData } = useAuth();
@@ -249,19 +248,6 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
             ))}
           </div>
         )}
-      </div>
-
-      {/* Quick Team Banner */}
-      <div className="bg-white rounded-3xl border border-slate-200 p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
-        <div>
-          <h3 className="text-sm font-bold text-slate-900">Participating as a Team?</h3>
-          <p className="text-xs text-slate-500 mt-0.5">
-            Form collaborative squads across academic sections and confirm individual invitations.
-          </p>
-        </div>
-        <Button variant="outline" size="sm" onClick={onOpenTeamFormation}>
-          Manage Teams
-        </Button>
       </div>
     </div>
   );

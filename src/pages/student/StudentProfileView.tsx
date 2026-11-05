@@ -55,6 +55,8 @@ export const StudentProfileView: React.FC = () => {
           profilePhotoUrl: res.url,
           profilePhotoPublicId: res.publicId,
         });
+        window.dispatchEvent(new CustomEvent('signovanta:student-updated', { detail: { registrationNumber: studentData.registrationNumber } }));
+        window.dispatchEvent(new Event('signovanta:data-updated'));
       }
     } catch (err: any) {
       setErrorMsg(err.message || 'Failed to upload photo.');

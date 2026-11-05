@@ -110,6 +110,7 @@ export interface Staff {
   supportingInfo?: string;
   isSuspended: boolean;
   uid?: string;
+  profilePhotoUrl?: string;
   createdAt: string;
   approvedAt?: string;
   approvedBy?: string;

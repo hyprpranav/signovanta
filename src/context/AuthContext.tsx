@@ -57,11 +57,25 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (user.role === 'STUDENT' && user.registrationNumber) {
           const students = getLocalStudents();
           const std = students.find(s => s.registrationNumber.toUpperCase() === user.registrationNumber?.toUpperCase());
-          if (std) setStudentData(std);
+          if (std) {
+            setStudentData(std);
+            if (std.profilePhotoUrl && user.profilePhotoUrl !== std.profilePhotoUrl) {
+              const updatedUser = { ...user, profilePhotoUrl: std.profilePhotoUrl };
+              setCurrentUser(updatedUser);
+              localStorage.setItem(CURRENT_USER_STORAGE, JSON.stringify(updatedUser));
+            }
+          }
         } else if (['STAFF', 'HOD', 'AHOD'].includes(user.role) && user.staffId) {
           const staffList = getLocalStaff();
           const stf = staffList.find(s => s.staffId.toUpperCase() === user.staffId?.toUpperCase());
-          if (stf) setStaffData(stf);
+          if (stf) {
+            setStaffData(stf);
+            if (stf.profilePhotoUrl && user.profilePhotoUrl !== stf.profilePhotoUrl) {
+              const updatedUser = { ...user, profilePhotoUrl: stf.profilePhotoUrl };
+              setCurrentUser(updatedUser);
+              localStorage.setItem(CURRENT_USER_STORAGE, JSON.stringify(updatedUser));
+            }
+          }
         }
       }
     } catch (e) {
