@@ -7,6 +7,7 @@ import { Button } from '../../components/common/Button';
 import { ProgressBar } from '../../components/common/ProgressBar';
 import { Modal } from '../../components/common/Modal';
 import { PostEventSubmissionModal } from './PostEventSubmissionModal';
+import { ApplicationEditModal } from '../../components/common/ApplicationEditModal';
 import {
   FileText,
   Calendar,
@@ -18,6 +19,7 @@ import {
   History,
   AlertCircle,
   Plus,
+  Pencil,
 } from 'lucide-react';
 
 interface StudentApplicationsViewProps {
@@ -27,7 +29,7 @@ interface StudentApplicationsViewProps {
 export const StudentApplicationsView: React.FC<StudentApplicationsViewProps> = ({
   onNewEvent,
 }) => {
-  const { studentData } = useAuth();
+  const { currentUser, studentData } = useAuth();
   if (!studentData) return null;
 
   const [applications, setApplications] = useState<EventApplication[]>(() =>
@@ -37,6 +39,7 @@ export const StudentApplicationsView: React.FC<StudentApplicationsViewProps> = (
   const [filter, setFilter] = useState<string>('ALL');
   const [selectedAppForAudit, setSelectedAppForAudit] = useState<EventApplication | null>(null);
   const [selectedAppForPostEvent, setSelectedAppForPostEvent] = useState<EventApplication | null>(null);
+  const [selectedAppForEdit, setSelectedAppForEdit] = useState<EventApplication | null>(null);
 
   const reload = () => {
     setApplications(getApplicationsForStudent(studentData.registrationNumber));
@@ -153,6 +156,54 @@ export const StudentApplicationsView: React.FC<StudentApplicationsViewProps> = (
                 </div>
               )}
 
+              <div className="grid grid-cols-1 gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs sm:grid-cols-3">
+                <p>
+                  <span className="block font-bold uppercase tracking-wide text-slate-400">Submitted</span>
+                  <span className="font-medium text-slate-700">{new Date(app.createdAt).toLocaleString()}</span>
+                </p>
+                <p>
+                  <span className="block font-bold uppercase tracking-wide text-slate-400">50% approved</span>
+                  <span className="font-medium text-slate-700">{app.preApprovedAt ? new Date(app.preApprovedAt).toLocaleString() : 'Pending'}</span>
+                </p>
+                <p>
+                  <span className="block font-bold uppercase tracking-wide text-slate-400">100% submitted</span>
+                  <span className="font-medium text-slate-700">{app.postEventSubmittedAt ? new Date(app.postEventSubmittedAt).toLocaleString() : 'Pending'}</span>
+                </p>
+              </div>
+
+              {app.status === 'CERTIFICATE_SUBMITTED' && (
+                <div className="p-4 bg-amber-50 border border-amber-200 rounded-2xl flex items-start gap-3">
+                  <Clock size={18} className="mt-0.5 shrink-0 text-amber-700" />
+                  <div>
+                    <p className="text-sm font-bold text-amber-950">
+                      100% verification is awaiting Admin/Staff approval
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-amber-800">
+                      Your post-event details and certificates have been submitted successfully.
+                      Please contact the Admin or Staff if the final verification is still pending.
+                    </p>
+                  </div>
+                </div>
+              )}
+              {app.status === 'COMPLETED' && (
+                <div className="rounded-2xl border-2 border-amber-300 bg-amber-50 p-4">
+                  <p className="text-sm font-black text-amber-950">
+                    {app.studentEditEnabledAt ? 'Student editing has been enabled for this event' : 'Editing is disabled by default after 100% approval'}
+                  </p>
+                  <p className="mt-1 text-xs font-semibold leading-5 text-amber-900">
+                    {app.studentEditEnabledAt
+                      ? `Enabled by ${app.studentEditEnabledByName || 'Admin/Staff'} on ${new Date(app.studentEditEnabledAt).toLocaleString()}.`
+                      : 'Request the Students Affair Head/Admin to enable editing if any submitted student or event detail is incorrect.'}
+                  </p>
+                  {app.studentEditEnabledAt && <button
+                    onClick={() => setSelectedAppForEdit(app)}
+                    className="mt-3 rounded-xl bg-amber-600 px-3 py-2 text-xs font-bold text-white hover:bg-amber-700"
+                  >
+                    <Pencil size={14} className="mr-1 inline" /> Edit This Event
+                  </button>}
+                </div>
+              )}
+
               {/* Action Buttons */}
               <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100">
                 <button
@@ -247,7 +298,19 @@ export const StudentApplicationsView: React.FC<StudentApplicationsViewProps> = (
           }}
         />
       )}
+      {selectedAppForEdit && currentUser && (
+        <ApplicationEditModal
+          application={selectedAppForEdit}
+          editorUid={currentUser.uid}
+          editorName={studentData.fullName}
+          editorRole="STUDENT"
+          onClose={() => setSelectedAppForEdit(null)}
+          onSaved={updated => {
+            setApplications(current => current.map(item => item.id === updated.id ? updated : item));
+            setSelectedAppForEdit(null);
+          }}
+        />
+      )}
     </div>
   );
 };
-

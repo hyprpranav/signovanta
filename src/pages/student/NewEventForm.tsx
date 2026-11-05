@@ -40,12 +40,16 @@ export const NewEventForm: React.FC<NewEventFormProps> = ({ onBack, onSuccess })
   const [eventWebsite, setEventWebsite] = useState('');
   const [registrationLink, setRegistrationLink] = useState('');
   const [eventDescription, setEventDescription] = useState('');
+  const [parentGuardianName, setParentGuardianName] = useState('');
+  const [parentGuardianMobile, setParentGuardianMobile] = useState('');
+  const [guideName, setGuideName] = useState('');
   const [participationType, setParticipationType] = useState<ParticipationType>('INDIVIDUAL');
   const [teamName, setTeamName] = useState('');
-  const [facultyCoordinator, setFacultyCoordinator] = useState('Dr. Priya Sundaram');
+  const [teamSize, setTeamSize] = useState(2);
+  const [teamMembers, setTeamMembers] = useState<Array<{ registrationNumber: string; fullName: string }>>([]);
 
   // Brochure Upload
-  const [brochureUrl, setBrochureUrl] = useState('');
+  const [browserUrl, setBrowserUrl] = useState('');
   const [uploadingBrochure, setUploadingBrochure] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
 
@@ -55,21 +59,17 @@ export const NewEventForm: React.FC<NewEventFormProps> = ({ onBack, onSuccess })
 
   if (!currentUser || !studentData) return null;
 
-  const handleBrochureUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleBrowserUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     setUploadingBrochure(true);
     setUploadProgress(10);
     setError(null);
-
     try {
-      const res = await uploadToCloudinary(file, 'brochures', (pct) => {
-        setUploadProgress(pct);
-      });
-      setBrochureUrl(res.url);
-    } catch (err: any) {
-      setError(err.message || 'Failed to upload event brochure.');
+      const res = await uploadToCloudinary(file, 'brochures', setUploadProgress);
+      setBrowserUrl(res.url);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to upload browser document.');
     } finally {
       setUploadingBrochure(false);
     }
@@ -106,8 +106,28 @@ export const NewEventForm: React.FC<NewEventFormProps> = ({ onBack, onSuccess })
       setError('Event Description is required.');
       return;
     }
+    if (!isDraft && !parentGuardianName.trim()) {
+      setError('Parent/Guardian name is required for every event submission.');
+      return;
+    }
+    if (!isDraft && !parentGuardianMobile.trim()) {
+      setError('Parent/Guardian mobile number is required for every event submission.');
+      return;
+    }
+    if (!isDraft && !guideName.trim()) {
+      setError('Guide / Staff name is required for every event submission.');
+      return;
+    }
     if (participationType === 'TEAM' && !teamName.trim()) {
       setError('Please provide a Team Name for team participation.');
+      return;
+    }
+    if (participationType === 'TEAM' && teamMembers.length !== teamSize - 1) {
+      setError(`Please add exactly ${teamSize - 1} teammate${teamSize === 2 ? '' : 's'}.`);
+      return;
+    }
+    if (!browserUrl && !isDraft) {
+      setError('Browser document is mandatory for the first event submission.');
       return;
     }
 
@@ -134,10 +154,15 @@ export const NewEventForm: React.FC<NewEventFormProps> = ({ onBack, onSuccess })
           eventWebsite: eventWebsite.trim(),
           registrationLink: registrationLink.trim(),
           eventDescription: eventDescription.trim(),
+          parentGuardianName: parentGuardianName.trim() || undefined,
+          parentGuardianMobile: parentGuardianMobile.trim() || undefined,
+          guideName: guideName.trim() || undefined,
           participationType,
           teamName: participationType === 'TEAM' ? teamName.trim() : undefined,
-          facultyCoordinator,
-          brochureUrl,
+          teamSize: participationType === 'TEAM' ? teamSize : undefined,
+          teamMembers: participationType === 'TEAM' ? teamMembers : undefined,
+          facultyCoordinator: guideName.trim(),
+          browserUrl,
           status: isDraft ? 'DRAFT' : 'SUBMITTED',
         },
         isDraft
@@ -428,70 +453,106 @@ export const NewEventForm: React.FC<NewEventFormProps> = ({ onBack, onSuccess })
                 placeholder="e.g. Innovators Club Squad"
                 className="w-full px-3 py-2 text-xs bg-white border border-blue-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 font-semibold"
               />
-              <p className="text-[11px] text-blue-700">
-                Team members can be configured in the <strong>Team Formation</strong> tab where each member must individually log in and confirm their invitation.
-              </p>
+              <label className="block text-xs font-bold text-blue-950">
+                Team Size
+                <input type="number" min={2} max={10} value={teamSize} onChange={(e) => {
+                  const size = Math.max(2, Math.min(10, Number(e.target.value) || 2));
+                  setTeamSize(size);
+                  setTeamMembers(current => current.slice(0, size - 1));
+                }} className="mt-1 w-full px-3 py-2 text-xs bg-white border border-blue-300 rounded-xl" />
+              </label>
+              <div className="space-y-2">
+                {Array.from({ length: teamSize - 1 }).map((_, index) => {
+                  const member = teamMembers[index] || { registrationNumber: '', fullName: '' };
+                  return (
+                    <div key={index} className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <input value={member.registrationNumber} placeholder={`Member ${index + 1} register number`} onChange={(e) => {
+                        const next = [...teamMembers];
+                        next[index] = { ...member, registrationNumber: e.target.value.toUpperCase() };
+                        setTeamMembers(next);
+                      }} className="w-full px-3 py-2 text-xs bg-white border border-blue-300 rounded-xl" />
+                      <input value={member.fullName} placeholder="Member name" onChange={(e) => {
+                        const next = [...teamMembers];
+                        next[index] = { ...member, fullName: e.target.value };
+                        setTeamMembers(next);
+                      }} className="w-full px-3 py-2 text-xs bg-white border border-blue-300 rounded-xl" />
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>
 
-        {/* Step 4: Faculty Coordinator & Brochure */}
+        <div className="space-y-4 pt-2 border-t border-slate-100">
+            <div>
+              <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                4. Parent/Guardian & Guide Details
+              </h3>
+              <p className="mt-1 text-xs text-slate-500">
+                Enter these details for this event submission.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Parent/Guardian Name <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={parentGuardianName}
+                  onChange={(e) => setParentGuardianName(e.target.value)}
+                  placeholder="Enter parent or guardian name"
+                  className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Parent/Guardian Mobile Number <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="tel"
+                  required
+                  value={parentGuardianMobile}
+                  onChange={(e) => setParentGuardianMobile(e.target.value)}
+                  placeholder="Enter mobile number"
+                  className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900"
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Guide / Staff Name <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                value={guideName}
+                onChange={(e) => setGuideName(e.target.value)}
+                placeholder="Type guide or staff name"
+                className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900"
+              />
+            </div>
+          </div>
+
+        {/* Browser Proof */}
         <div className="space-y-4 pt-2 border-t border-slate-100">
           <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-            4. Faculty Coordinator & Brochure
+            5. Browser Proof
           </h3>
 
           <div>
-            <label className="block text-xs font-bold text-slate-700 mb-1">
-              Department Faculty Coordinator <span className="text-rose-500">*</span>
-            </label>
-            <select
-              value={facultyCoordinator}
-              onChange={(e) => setFacultyCoordinator(e.target.value)}
-              className="w-full px-3 py-2.5 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900 font-medium"
-            >
-              <option value="Dr. Priya Sundaram">Dr. Priya Sundaram (Associate Professor & AHOD - ECE)</option>
-              <option value="Dr. M. Sangeetha">Dr. M. Sangeetha (Professor & HOD - ECE)</option>
-              <option value="Prof. R. Venkatesh">Prof. R. Venkatesh (Assistant Professor - ECE)</option>
-            </select>
-          </div>
-
-          <div>
             <label className="block text-xs font-bold text-slate-700 mb-1.5">
-              Event Brochure / Poster (Image or PDF)
+              Browser / Proof of Registration (Image or PDF, max 5MB) <span className="text-rose-500">*</span>
             </label>
-            <div className="flex items-center gap-3">
-              <label className="flex-1 cursor-pointer">
-                <div className="flex items-center justify-center gap-2 px-4 py-3 bg-slate-50 hover:bg-slate-100 border border-dashed border-slate-300 rounded-2xl text-xs font-bold text-slate-700 transition-colors">
-                  <UploadCloud size={18} />
-                  <span>
-                    {uploadingBrochure
-                      ? `Uploading Brochure (${uploadProgress}%)...`
-                      : brochureUrl
-                      ? 'Brochure Uploaded (Click to Change)'
-                      : 'Upload Official Event Brochure'}
-                  </span>
-                </div>
-                <input
-                  type="file"
-                  accept="image/*,application/pdf"
-                  onChange={handleBrochureUpload}
-                  disabled={uploadingBrochure}
-                  className="hidden"
-                />
-              </label>
-
-              {brochureUrl && (
-                <a
-                  href={brochureUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-3 py-3 bg-blue-50 border border-blue-200 rounded-2xl text-xs font-bold text-blue-700 hover:bg-blue-100 transition-colors"
-                >
-                  View
-                </a>
-              )}
-            </div>
+            <label className="block cursor-pointer">
+              <div className="flex items-center justify-center gap-2 px-4 py-3 bg-slate-50 hover:bg-slate-100 border border-dashed border-slate-300 rounded-2xl text-xs font-bold text-slate-700">
+                <UploadCloud size={18} />
+                <span>{browserUrl ? 'Browser document uploaded (Click to change)' : 'Upload browser document'}</span>
+              </div>
+              <input type="file" accept="image/*,application/pdf" onChange={handleBrowserUpload} disabled={uploadingBrochure} className="hidden" />
+            </label>
           </div>
         </div>
 
@@ -521,4 +582,3 @@ export const NewEventForm: React.FC<NewEventFormProps> = ({ onBack, onSuccess })
     </div>
   );
 };
-

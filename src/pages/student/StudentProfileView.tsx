@@ -18,7 +18,8 @@ import {
 export const StudentProfileView: React.FC = () => {
   const { currentUser, studentData, updateCurrentStudentProfile } = useAuth();
   const [mobile, setMobile] = useState(studentData?.mobile || '');
-  const [email, setEmail] = useState(studentData?.email || '');
+  const [fullName, setFullName] = useState(studentData?.fullName || '');
+  const [dateOfBirth, setDateOfBirth] = useState(studentData?.dateOfBirth || '');
   const [profilePhotoUrl, setProfilePhotoUrl] = useState(studentData?.profilePhotoUrl || '');
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
@@ -72,13 +73,16 @@ export const StudentProfileView: React.FC = () => {
       const idx = list.findIndex(s => s.id === studentData.id);
       if (idx !== -1) {
         list[idx].mobile = mobile.trim();
-        list[idx].email = email.trim();
+        list[idx].email = studentData.email;
+        list[idx].fullName = fullName.trim();
+        list[idx].dateOfBirth = dateOfBirth;
         list[idx].profilePhotoUrl = profilePhotoUrl;
         saveLocalStudents(list);
 
         updateCurrentStudentProfile({
           mobile: mobile.trim(),
-          email: email.trim(),
+          fullName: fullName.trim(),
+          dateOfBirth,
           profilePhotoUrl,
         });
 
@@ -171,7 +175,7 @@ export const StudentProfileView: React.FC = () => {
             </div>
             <div>
               <span className="text-slate-500 block">Full Name</span>
-              <span className="font-bold text-slate-900">{studentData.fullName}</span>
+              <input value={fullName} onChange={(e) => setFullName(e.target.value)} className="w-full mt-1 px-2 py-1 text-xs bg-white border border-blue-200 rounded-lg font-bold" />
             </div>
             <div>
               <span className="text-slate-500 block">Academic Section</span>
@@ -191,6 +195,10 @@ export const StudentProfileView: React.FC = () => {
           </h4>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Date of Birth</label>
+              <input type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl" />
+            </div>
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">Mobile Number</label>
               <div className="relative">
@@ -213,8 +221,9 @@ export const StudentProfileView: React.FC = () => {
                 <input
                   type="email"
                   required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  value={studentData.email}
+                  readOnly
+                  disabled
                   className="w-full pl-8 pr-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900"
                 />
                 <Mail size={14} className="absolute left-2.5 top-3 text-slate-400" />
@@ -232,4 +241,3 @@ export const StudentProfileView: React.FC = () => {
     </div>
   );
 };
-

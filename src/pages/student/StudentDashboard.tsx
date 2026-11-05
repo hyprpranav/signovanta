@@ -5,7 +5,6 @@ import { getApplicationsForStudent } from '../../services/firebase/firestoreServ
 import { ProgressBar } from '../../components/common/ProgressBar';
 import { Badge } from '../../components/common/Badge';
 import { Button } from '../../components/common/Button';
-import { StatusDot } from '../../components/common/StatusDot';
 import {
   PlusCircle,
   Clock,
@@ -56,7 +55,6 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
               <span className="text-xs font-bold uppercase tracking-wider text-blue-300">
                 Student Event Portal
               </span>
-              <StatusDot status="ONLINE" size="sm" />
             </div>
             <h1 className="text-xl sm:text-2xl font-black tracking-tight">
               Welcome, {studentData.fullName}
@@ -228,4 +226,3 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     </div>
   );
 };
-

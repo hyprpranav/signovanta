@@ -1,14 +1,25 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { EventApplication, UserRole } from '../../types';
+import { EventApplication, Student, UserRole } from '../../types';
 import {
   getAllApplications,
   preApproveApplication,
   completeEventApplication,
+  enableStudentApplicationEditing,
   requestCorrectionApplication,
   rejectApplication,
+  createStaffAnnouncement,
+  getUserNotifications,
+  syncApplicationsFromFirebase,
+  deleteApplication,
 } from '../../services/firebase/firestoreService';
-import { StudentDirectoryMonitor } from '../../components/monitoring/StudentDirectoryMonitor';
+import { ExportManagement } from '../../components/common/ExportManagement';
+import { SubmissionsPanel } from '../../components/common/SubmissionsPanel';
+import { DeleteThingsPanel } from '../../components/common/DeleteThingsPanel';
+import { EventOutcomeAnalytics } from '../../components/common/EventOutcomeAnalytics';
+import { WinnersCertificateShowcase } from '../../components/analytics/WinnersCertificateShowcase';
+import { EventParticipationAnalytics } from '../../components/analytics/EventParticipationAnalytics';
+import { getLocalStudents, syncStudentsFromFirebase } from '../../services/firebase/authService';
 import { Badge } from '../../components/common/Badge';
 import { Button } from '../../components/common/Button';
 import { ProgressBar } from '../../components/common/ProgressBar';
@@ -16,7 +27,6 @@ import { Modal } from '../../components/common/Modal';
 import {
   CheckSquare,
   FileCheck,
-  Radio,
   Clock,
   CheckCircle2,
   XCircle,
@@ -25,12 +35,49 @@ import {
   Users,
   Search,
   Filter,
+  Megaphone,
 } from 'lucide-react';
 
-export const StaffDashboard: React.FC = () => {
+interface StaffDashboardProps {
+  activeTab?: string;
+}
+
+export const StaffDashboard: React.FC<StaffDashboardProps> = ({ activeTab: requestedTab }) => {
   const { currentUser, staffData } = useAuth();
-  const [activeTab, setActiveTab] = useState<'approvals' | 'certificates' | 'directory'>('approvals');
+  const [activeTab, setActiveTab] = useState<'approvals' | 'certificates' | 'announcements' | 'exports' | 'analytics' | 'submissions' | 'delete_things'>('approvals');
   const [applications, setApplications] = useState<EventApplication[]>(() => getAllApplications());
+  const [students, setStudents] = useState(() => getLocalStudents());
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const [announcementTitle, setAnnouncementTitle] = useState('');
+  const [announcementMessage, setAnnouncementMessage] = useState('');
+  const [announcementStatus, setAnnouncementStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    const tabMap: Record<string, typeof activeTab> = {
+      pre_approvals: 'approvals',
+      certificate_verification: 'certificates',
+      delete_things: 'delete_things',
+      submissions: 'submissions',
+      announcements: 'announcements',
+      exports: 'exports',
+      analytics: 'analytics',
+    };
+    if (requestedTab && tabMap[requestedTab]) setActiveTab(tabMap[requestedTab]);
+  }, [requestedTab]);
+
+  useEffect(() => {
+    void Promise.all([syncApplicationsFromFirebase(), syncStudentsFromFirebase()])
+      .then(([remoteApplications, remoteStudents]) => {
+        setApplications(remoteApplications);
+        setStudents(remoteStudents);
+      });
+  }, []);
+
+  useEffect(() => {
+    const refreshStudents = () => setStudents(getLocalStudents());
+    window.addEventListener('signovanta:student-updated', refreshStudents);
+    return () => window.removeEventListener('signovanta:student-updated', refreshStudents);
+  }, []);
 
   // Review Modal state
   const [selectedApp, setSelectedApp] = useState<EventApplication | null>(null);
@@ -107,6 +154,21 @@ export const StaffDashboard: React.FC = () => {
     }
   };
 
+  const handleAnnouncementSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    setAnnouncementStatus(null);
+    try {
+      createStaffAnnouncement(announcementTitle, announcementMessage, currentUser.displayName);
+      setAnnouncementTitle('');
+      setAnnouncementMessage('');
+      setAnnouncementStatus('Announcement posted. It is now visible in every student notification center.');
+    } catch (err) {
+      setAnnouncementStatus(err instanceof Error ? err.message : 'Failed to post announcement.');
+    }
+  };
+
+  const announcements = getUserNotifications('ALL');
+
   return (
     <div className="space-y-6">
       {/* Dynamic Role Header Banner */}
@@ -133,6 +195,22 @@ export const StaffDashboard: React.FC = () => {
             </div>
           </div>
 
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+            {[
+              ['Students', students.length, 'bg-blue-600'],
+              ['Pre-Approval Queue', preApprovalQueue.length, 'bg-amber-500'],
+              ['Certificates to Verify', certificateVerificationQueue.length, 'bg-purple-600'],
+              ['Completed', completedList.length, 'bg-emerald-600'],
+              ['Winning Students', new Set(applications.filter(app => app.prizeWon).map(app => app.studentRegNo)).size, 'bg-amber-600'],
+            ].map(([label, value, color]) => (
+              <div key={String(label)} className={`${color} rounded-2xl p-4 text-white shadow-sm`}>
+                <span className="text-[11px] font-bold uppercase tracking-wider text-white/80">{label}</span>
+                <strong className="block text-2xl font-black mt-1">{value}</strong>
+                <span className="text-[11px] text-white/80">Live database count</span>
+              </div>
+            ))}
+          </div>
+
           <div className="flex items-center gap-2">
             <span className="text-xs bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 px-3 py-1.5 rounded-full font-bold">
               ✓ Active Authenticated Session
@@ -141,44 +219,55 @@ export const StaffDashboard: React.FC = () => {
         </div>
       </div>
 
-      {/* Navigation Tabs */}
-      <div className="flex bg-slate-100 p-1.5 rounded-2xl max-w-xl">
-        <button
-          onClick={() => setActiveTab('approvals')}
-          className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-            activeTab === 'approvals'
-              ? 'bg-white text-slate-900 shadow-xs'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <CheckSquare size={15} />
-          <span>Pre-Approvals ({preApprovalQueue.length})</span>
-        </button>
+      {activeTab === 'exports' && (
+        <ExportManagement students={students} staff={[]} applications={applications} />
+      )}
+      {activeTab === 'analytics' && <EventOutcomeAnalytics applications={applications} />}
 
-        <button
-          onClick={() => setActiveTab('certificates')}
-          className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-            activeTab === 'certificates'
-              ? 'bg-white text-slate-900 shadow-xs'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <FileCheck size={15} />
-          <span>Verify Certificates ({certificateVerificationQueue.length})</span>
-        </button>
+      {activeTab === 'announcements' && (
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-5">
+          <form onSubmit={handleAnnouncementSubmit} className="bg-white rounded-3xl border border-slate-200 shadow-xs p-5 sm:p-6 space-y-4">
+            <div>
+              <h2 className="text-base font-bold text-slate-900">Announce to Students</h2>
+              <p className="text-xs text-slate-500 mt-1">This message will be delivered to every student notification center.</p>
+            </div>
+            {announcementStatus && (
+              <div className={`p-3 rounded-xl text-xs font-semibold ${announcementStatus.startsWith('Announcement posted') ? 'bg-emerald-50 border border-emerald-200 text-emerald-800' : 'bg-rose-50 border border-rose-200 text-rose-800'}`}>
+                {announcementStatus}
+              </div>
+            )}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Announcement Title</label>
+              <input value={announcementTitle} onChange={(event) => setAnnouncementTitle(event.target.value)} required maxLength={120} placeholder="e.g. Hackathon registration deadline" className="w-full px-3 py-2.5 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900" />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Message</label>
+              <textarea value={announcementMessage} onChange={(event) => setAnnouncementMessage(event.target.value)} required maxLength={1000} rows={6} placeholder="Write the announcement for all students..." className="w-full px-3 py-2.5 text-xs bg-slate-50 border border-slate-300 rounded-xl resize-none focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900" />
+            </div>
+            <Button type="submit" variant="primary" leftIcon={<Megaphone size={15} />}>Post Announcement</Button>
+          </form>
 
-        <button
-          onClick={() => setActiveTab('directory')}
-          className={`flex-1 py-2.5 px-3 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-            activeTab === 'directory'
-              ? 'bg-white text-slate-900 shadow-xs'
-              : 'text-slate-600 hover:text-slate-900'
-          }`}
-        >
-          <Radio size={15} className="text-emerald-500 animate-pulse" />
-          <span>Live Presence</span>
-        </button>
-      </div>
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-5 sm:p-6 space-y-3">
+            <div>
+              <h2 className="text-base font-bold text-slate-900">Posted Announcements</h2>
+              <p className="text-xs text-slate-500 mt-1">Broadcast messages sent to students.</p>
+            </div>
+            {announcements.length === 0 ? (
+              <div className="py-10 text-center text-xs text-slate-500">No announcements posted yet.</div>
+            ) : (
+              announcements.map((announcement) => (
+                <div key={announcement.id} className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl">
+                  <div className="flex items-start justify-between gap-3">
+                    <h3 className="text-xs font-bold text-slate-900">{announcement.title}</h3>
+                    <span className="text-[10px] text-slate-400 whitespace-nowrap">{new Date(announcement.createdAt).toLocaleString()}</span>
+                  </div>
+                  <p className="text-xs text-slate-600 mt-1 leading-relaxed">{announcement.message}</p>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Tab 1: Pre-Approval Queue (50% stage) */}
       {activeTab === 'approvals' && (
@@ -250,6 +339,7 @@ export const StaffDashboard: React.FC = () => {
 
                   {/* Actions */}
                   <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+                    <Button variant="outline" size="sm" onClick={() => setSelectedStudent(students.find(student => student.registrationNumber === app.studentRegNo) || null)}>View Student</Button>
                     <Button
                       variant="success"
                       size="sm"
@@ -331,6 +421,8 @@ export const StaffDashboard: React.FC = () => {
                   </div>
 
                   <div className="p-3 bg-slate-50 rounded-2xl text-xs space-y-1.5">
+                    <p><strong>100% Submitted:</strong> {app.postEventSubmittedAt ? new Date(app.postEventSubmittedAt).toLocaleString() : 'Not available'}</p>
+                    <p><strong>50% Approved:</strong> {app.preApprovedByName ? `${app.preApprovedByName} • ${app.preApprovedAt ? new Date(app.preApprovedAt).toLocaleString() : 'Time unavailable'}` : 'Pending'}</p>
                     <p>
                       <strong>Prize Standing:</strong>{' '}
                       {app.prizeWon ? (
@@ -378,6 +470,7 @@ export const StaffDashboard: React.FC = () => {
                   </div>
 
                   <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+                    <Button variant="outline" size="sm" onClick={() => setSelectedStudent(students.find(student => student.registrationNumber === app.studentRegNo) || null)}>View Student</Button>
                     <Button
                       variant="primary"
                       size="sm"
@@ -404,23 +497,135 @@ export const StaffDashboard: React.FC = () => {
               ))}
             </div>
           )}
+
+          {/* Hall of Fame & Verified Winner Certificates */}
+          <div className="pt-4">
+            <WinnersCertificateShowcase
+              applications={applications}
+              title="🏆 Verified Winner Certificates & Hall of Fame"
+              subtitle="Review uploaded trophies and certificates across all sections"
+            />
+          </div>
         </div>
       )}
 
-      {/* Tab 3: Real-time Student Directory */}
-      {activeTab === 'directory' && (
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-base font-bold text-slate-900">Department Student Directory</h2>
-              <p className="text-xs text-slate-500">Live presence, login history, and event metrics</p>
-            </div>
-          </div>
-          <StudentDirectoryMonitor isAdminView={false} />
+      {/* Tab: Analytics */}
+      {activeTab === 'analytics' && (
+        <div className="space-y-6">
+          <EventParticipationAnalytics students={students} applications={applications} isStaffOrAdminView />
+          <EventOutcomeAnalytics applications={applications} />
         </div>
+      )}
+
+      {activeTab === 'delete_things' && (
+        <DeleteThingsPanel students={students} staff={[]} />
+      )}
+
+      {activeTab === 'submissions' && (
+        <SubmissionsPanel
+          applications={applications}
+          editorUid={currentUser?.uid || 'staff-user'}
+          editorName={currentUser?.displayName || 'Staff'}
+          editorRole={currentUser?.role || 'STAFF'}
+          onUpdate={updated => setApplications(current => current.map(item => item.id === updated.id ? updated : item))}
+          onEnableStudentEdit={application => {
+            try {
+              const updated = enableStudentApplicationEditing(
+                application.id,
+                currentUser?.uid || 'staff-user',
+                currentUser?.displayName || 'Staff',
+                currentUser?.role || 'STAFF'
+              );
+              setApplications(current => current.map(item => item.id === updated.id ? updated : item));
+            } catch (error) {
+              alert(error instanceof Error ? error.message : 'Unable to enable student editing.');
+            }
+          }}
+          onComplete={application => {
+            setSelectedApp(application);
+            setActionType('complete');
+          }}
+          onApprove={application => {
+            setSelectedApp(application);
+            setActionType('pre_approve');
+          }}
+          onReject={application => {
+            setSelectedApp(application);
+            setActionType('reject');
+          }}
+          onDelete={async application => {
+            if (!window.confirm(`Delete the rejected submission "${application.eventName}"?`)) return;
+            try {
+              await deleteApplication(application.id);
+              setApplications(current => current.filter(item => item.id !== application.id));
+            } catch (error) {
+              alert(error instanceof Error ? error.message : 'Deletion failed.');
+            }
+          }}
+        />
       )}
 
       {/* Review Confirmation Modal */}
+      {selectedStudent && (
+        <Modal isOpen={true} onClose={() => setSelectedStudent(null)} title="Student Profile" subtitle="Review student information and submitted events" maxWidth="xl">
+          <div className="space-y-5">
+            <div className="flex items-center gap-3 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 p-4 text-white shadow-sm">
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-white/15 text-lg font-bold">
+                {selectedStudent.fullName.slice(0, 1).toUpperCase()}
+              </div>
+              <div className="min-w-0">
+                <h3 className="truncate text-base font-bold">{selectedStudent.fullName}</h3>
+                <p className="mt-0.5 text-xs text-blue-100">{selectedStudent.registrationNumber} • {selectedStudent.section}</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {[
+                ['Register Number', selectedStudent.registrationNumber, true],
+                ['Email Address', selectedStudent.email || 'Not provided', false],
+                ['Phone Number', selectedStudent.mobile || 'Not provided', false],
+                ['Events Participated', String(selectedStudent.eventCount || 0), false],
+              ].map(([label, value, mono]) => (
+                <div key={label as string} className="rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+                  <p className={`mt-1 break-words text-sm font-bold text-slate-900 ${mono ? 'font-mono' : ''}`}>{value}</p>
+                </div>
+              ))}
+            </div>
+            <section className="overflow-hidden rounded-2xl border border-slate-200">
+              <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Submitted Events & Documents</h3>
+                  <p className="mt-0.5 text-xs text-slate-500">Track submissions and approval progress</p>
+                </div>
+                <span className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-bold text-blue-700">
+                  {applications.filter(app => app.studentRegNo === selectedStudent.registrationNumber).length}
+                </span>
+              </div>
+              <div className="space-y-3 p-4">
+                {applications.filter(app => app.studentRegNo === selectedStudent.registrationNumber).map(app => (
+                  <div key={app.id} className="rounded-xl border border-slate-200 bg-white p-3 text-xs shadow-sm">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <strong className="text-sm text-slate-900">{app.eventName}</strong>
+                      <Badge status={app.status} size="sm" />
+                    </div>
+                    <div className="mt-3 grid gap-2 border-t border-slate-100 pt-3 sm:grid-cols-2">
+                      <p><span className="block text-[10px] font-semibold uppercase text-slate-400">Submitted</span><span className="font-medium text-slate-700">{new Date(app.createdAt).toLocaleString()}</span></p>
+                      <p><span className="block text-[10px] font-semibold uppercase text-slate-400">Pre-approval</span><span className="font-medium text-slate-700">{app.preApprovedByName ? `${app.preApprovedByName}${app.preApprovedAt ? ` • ${new Date(app.preApprovedAt).toLocaleString()}` : ''}` : 'Pending'}</span></p>
+                    </div>
+                  </div>
+                ))}
+                {applications.filter(app => app.studentRegNo === selectedStudent.registrationNumber).length === 0 && (
+                  <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-7 text-center">
+                    <p className="text-sm font-semibold text-slate-700">No event submissions found</p>
+                    <p className="mt-1 text-xs text-slate-500">Submitted events and approval details will appear here.</p>
+                  </div>
+                )}
+              </div>
+            </section>
+          </div>
+        </Modal>
+      )}
+
       {selectedApp && actionType && (
         <Modal
           isOpen={true}
@@ -492,4 +697,3 @@ export const StaffDashboard: React.FC = () => {
     </div>
   );
 };
-

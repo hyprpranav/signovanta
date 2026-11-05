@@ -45,7 +45,7 @@ export function saveCloudinaryConfig(config: CloudinaryConfig): void {
 export function validateUploadFile(
   file: File,
   allowedTypes: ('image' | 'pdf')[] = ['image', 'pdf'],
-  maxSizeMb: number = 10
+  maxSizeMb: number = 5
 ): { isValid: boolean; error?: string } {
   const isImage = file.type.startsWith('image/');
   const isPdf = file.type === 'application/pdf';
@@ -73,7 +73,7 @@ export function validateUploadFile(
 }
 
 /**
- * Uploads a file to Cloudinary with progress callback and local fallback
+ * Uploads a file to Cloudinary with progress callback.
  */
 export async function uploadToCloudinary(
   file: File,
@@ -87,9 +87,11 @@ export async function uploadToCloudinary(
 
   const config = getSavedCloudinaryConfig();
 
-  // If live Cloudinary is configured, upload to Cloudinary API
-  if (config && config.cloudName && config.uploadPreset) {
-    return new Promise((resolve, reject) => {
+  if (!config?.cloudName || !config.uploadPreset) {
+    throw new Error('Cloudinary is not configured. Add the Cloud Name and unsigned Upload Preset in the Cloudinary setup panel before uploading files.');
+  }
+
+  return new Promise((resolve, reject) => {
       const formData = new FormData();
       formData.append('file', file);
       formData.append('upload_preset', config.uploadPreset);
@@ -132,32 +134,5 @@ export async function uploadToCloudinary(
 
       xhr.onerror = () => reject(new Error('Network error during media upload.'));
       xhr.send(formData);
-    });
-  }
-
-  // Graceful simulation fallback for immediate local testing without breaking
-  return new Promise((resolve) => {
-    let p = 0;
-    const interval = setInterval(() => {
-      p += 25;
-      if (onProgress) onProgress(Math.min(p, 95));
-      if (p >= 100) {
-        clearInterval(interval);
-        const reader = new FileReader();
-        reader.onload = () => {
-          if (onProgress) onProgress(100);
-          resolve({
-            url: reader.result as string,
-            publicId: `sim_${folder}_${Date.now()}`,
-            fileName: file.name,
-            fileSize: file.size,
-            format: file.name.split('.').pop() || 'png',
-            isSimulated: true,
-          });
-        };
-        reader.readAsDataURL(file);
-      }
-    }, 150);
   });
 }
-

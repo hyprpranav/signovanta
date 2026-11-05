@@ -77,6 +77,11 @@ export const FirstTimeActivationModal: React.FC<FirstTimeActivationModalProps> =
         email: email.trim(),
         profilePhotoUrl,
       });
+      localStorage.setItem('signovanta_first_login_celebration', JSON.stringify({
+        title: 'Your account is activated',
+        message: 'Congratulations! Your SIGNOVANTA account is now active. You can submit your first event application from the dashboard.',
+      }));
+      window.dispatchEvent(new CustomEvent('signovanta:celebration-ready'));
       onSuccess();
     } catch (err: any) {
       setError(err.message || 'Failed to complete account activation.');
@@ -240,4 +245,3 @@ export const FirstTimeActivationModal: React.FC<FirstTimeActivationModalProps> =
     </Modal>
   );
 };
-

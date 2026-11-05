@@ -1,12 +1,10 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import {
   LayoutDashboard,
   User,
   PlusCircle,
   FileText,
-  Users,
-  Award,
   History,
   Bell,
   Settings,
@@ -14,19 +12,26 @@ import {
   GraduationCap,
   Briefcase,
   CheckSquare,
-  ShieldCheck,
   BarChart3,
   Flame,
-  Radio,
   FileCheck,
+  AlertCircle,
+  Trash2,
 } from 'lucide-react';
-import { Badge } from '../common/Badge';
 
 interface SidebarProps {
   currentTab: string;
   onSelectTab: (tabId: string) => void;
   isOpen: boolean;
   onClose: () => void;
+}
+
+interface NavItem {
+  id: string;
+  label: string;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+  highlight?: boolean;
+  notificationCount?: number;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -39,42 +44,82 @@ export const Sidebar: React.FC<SidebarProps> = ({
   if (!currentUser) return null;
 
   const role = currentUser.role;
+  const [notificationVersion, setNotificationVersion] = useState(0);
+
+  useEffect(() => {
+    const refresh = () => setNotificationVersion(version => version + 1);
+    window.addEventListener('storage', refresh);
+    window.addEventListener('signovanta:data-updated', refresh);
+    return () => {
+      window.removeEventListener('storage', refresh);
+      window.removeEventListener('signovanta:data-updated', refresh);
+    };
+  }, []);
+
+  const notifications = useMemo(() => {
+    void notificationVersion;
+    try {
+      const applications = JSON.parse(localStorage.getItem('signovanta_applications_cache') || '[]') as Array<{ status?: string }>;
+      const issues = JSON.parse(localStorage.getItem('signovanta_support_issues') || '[]') as Array<{ reply?: string }>;
+      const studentRequests = JSON.parse(localStorage.getItem('signovanta_student_requests_cache') || '[]') as Array<{ status?: string }>;
+      const staff = JSON.parse(localStorage.getItem('signovanta_staff_cache') || '[]') as Array<{ approvalStatus?: string }>;
+      const pendingSubmissions = applications.filter(application =>
+        ['SUBMITTED', 'UNDER_REVIEW', 'CORRECTION_REQUIRED'].includes(application.status || '')
+      ).length;
+      const pendingCertificates = applications.filter(application =>
+        ['CERTIFICATE_SUBMITTED', 'FINAL_VERIFICATION'].includes(application.status || '')
+      ).length;
+      const unresolvedIssues = issues.filter(issue => !issue.reply).length;
+      const pendingRegistrations = studentRequests.filter(request => request.status === 'PENDING').length;
+      const pendingStaff = staff.filter(member => member.approvalStatus === 'PENDING').length;
+      const notificationItems = JSON.parse(localStorage.getItem('signovanta_notifications_cache') || '[]') as Array<{ userId?: string; isRead?: boolean }>;
+      const studentNotifications = currentUser.role === 'STUDENT'
+        ? notificationItems.filter(item => (item.userId === currentUser.uid || item.userId === 'ALL') && !item.isRead).length
+        : 0;
+      return { pendingSubmissions, pendingCertificates, unresolvedIssues, pendingRegistrations, pendingStaff, studentNotifications };
+    } catch {
+      return { pendingSubmissions: 0, pendingCertificates: 0, unresolvedIssues: 0, pendingRegistrations: 0, pendingStaff: 0, studentNotifications: 0 };
+    }
+  }, [notificationVersion]);
 
   // Student Nav Items
-  const studentNav = [
+  const studentNav: NavItem[] = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'new_event', label: 'New Event', icon: PlusCircle, highlight: true },
     { id: 'my_profile', label: 'My Profile', icon: User },
-    { id: 'applications', label: 'My Applications', icon: FileText },
-    { id: 'teams', label: 'Team Formation', icon: Users },
-    { id: 'certificates', label: 'Certificates', icon: Award },
+    { id: 'applications', label: 'My Applications', icon: FileText, notificationCount: notifications.studentNotifications },
     { id: 'history', label: 'Event History', icon: History },
-    { id: 'notifications', label: 'Notifications', icon: Bell },
+    { id: 'issues', label: 'Facing Issues?', icon: AlertCircle },
     { id: 'settings', label: 'Settings', icon: Settings },
+    { id: 'delete_things', label: 'Delete Things', icon: Trash2 },
   ];
 
   // Staff Nav Items (Shared across STAFF, HOD, AHOD)
-  const staffNav = [
+  const staffNav: NavItem[] = [
     { id: 'staff_dashboard', label: 'Staff Overview', icon: LayoutDashboard },
-    { id: 'student_directory', label: 'Student Directory & Presence', icon: Radio, highlight: true },
-    { id: 'pre_approvals', label: 'Pre-Event Approvals (50%)', icon: CheckSquare },
-    { id: 'certificate_verification', label: 'Certificate Verification (100%)', icon: FileCheck },
-    { id: 'team_review', label: 'Team Approvals', icon: Users },
-    { id: 'reports', label: 'Department Reports', icon: BarChart3 },
-    { id: 'notifications', label: 'Notifications', icon: Bell },
+    { id: 'submissions', label: 'Submissions', icon: FileText, notificationCount: notifications.pendingSubmissions },
+    { id: 'pre_approvals', label: 'Pre-Event Approvals (50%)', icon: CheckSquare, notificationCount: notifications.pendingSubmissions },
+    { id: 'certificate_verification', label: 'Certificate Verification (100%)', icon: FileCheck, notificationCount: notifications.pendingCertificates },
+    { id: 'announcements', label: 'Announcements', icon: Bell },
+    { id: 'exports', label: 'Exports', icon: BarChart3 },
+    { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+    { id: 'issues', label: 'Facing Issues?', icon: AlertCircle, notificationCount: notifications.unresolvedIssues },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
   // Master Admin Nav Items
-  const adminNav = [
-    { id: 'admin_dashboard', label: 'Control Center', icon: LayoutDashboard },
-    { id: 'student_management', label: 'Student Management', icon: GraduationCap, highlight: true },
-    { id: 'staff_management', label: 'Staff & Role Requests', icon: Briefcase },
-    { id: 'event_management', label: 'Event Master & Categories', icon: FileText },
-    { id: 'live_monitoring', label: 'Real-Time Monitoring', icon: Radio },
-    { id: 'reports_analytics', label: 'Analytics & Reports', icon: BarChart3 },
-    { id: 'audit_logs', label: 'System Audit Logs', icon: ShieldCheck },
+  const adminNav: NavItem[] = [
+    { id: 'overview', label: 'Control Center', icon: LayoutDashboard },
+    { id: 'students', label: 'Student Management', icon: GraduationCap, highlight: true },
+    { id: 'staff', label: 'Staff & Role Requests', icon: Briefcase, notificationCount: notifications.pendingStaff },
+    { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+    { id: 'approvals', label: 'Application Approvals', icon: CheckSquare, notificationCount: notifications.pendingRegistrations },
+    { id: 'submissions', label: 'Submissions', icon: FileText, notificationCount: notifications.pendingSubmissions },
+    { id: 'categories', label: 'Event Categories', icon: FileText },
+    { id: 'exports', label: 'Exports', icon: BarChart3 },
+    { id: 'issues', label: 'Requests & Issues', icon: AlertCircle, notificationCount: notifications.unresolvedIssues },
     { id: 'settings', label: 'System Settings', icon: Settings },
+    { id: 'delete_things', label: 'Delete Things', icon: Trash2 },
   ];
 
   const navItems =
@@ -96,26 +141,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           isOpen ? 'translate-x-0' : '-translate-x-full'
         }`}
       >
-        {/* User Identity Header Card */}
-        <div className="p-4 border-b border-slate-100 bg-slate-50/70">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-slate-900 text-white flex items-center justify-center font-bold text-sm shrink-0">
-              {currentUser.displayName ? currentUser.displayName.charAt(0).toUpperCase() : 'U'}
-            </div>
-            <div className="overflow-hidden">
-              <h4 className="text-xs font-bold text-slate-900 truncate">
-                {currentUser.displayName}
-              </h4>
-              <p className="text-[11px] font-mono text-slate-500 truncate">
-                {currentUser.registrationNumber || currentUser.email}
-              </p>
-              <div className="mt-1">
-                <Badge role={currentUser.role} size="sm" />
-              </div>
-            </div>
-          </div>
-        </div>
-
         {/* Scrollable Nav Item Links */}
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
           {navItems.map((item) => {
@@ -139,6 +164,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
               >
                 <Icon size={17} className={isActive ? 'text-white' : item.highlight ? 'text-blue-700' : 'text-slate-500'} />
                 <span className="flex-1 truncate">{item.label}</span>
+                {item.notificationCount ? (
+                  <span
+                    className={`min-w-5 h-5 px-1.5 rounded-full flex items-center justify-center text-[10px] font-black ${
+                      isActive ? 'bg-rose-400 text-white' : 'bg-rose-600 text-white'
+                    }`}
+                    aria-label={`${item.notificationCount} new notification${item.notificationCount === 1 ? '' : 's'}`}
+                  >
+                    {item.notificationCount > 99 ? '99+' : item.notificationCount}
+                  </span>
+                ) : null}
               </button>
             );
           })}
@@ -146,6 +181,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
         {/* Bottom Signout */}
         <div className="p-3 border-t border-slate-100 bg-white">
+          <div className="flex items-center gap-2.5 px-2 py-2 mb-2">
+            <div className="w-9 h-9 rounded-full bg-slate-900 text-white flex items-center justify-center font-bold text-sm shrink-0 overflow-hidden">
+              {currentUser.profilePhotoUrl ? (
+                <img src={currentUser.profilePhotoUrl} alt="" className="w-full h-full object-cover" />
+              ) : (
+                currentUser.displayName.charAt(0).toUpperCase()
+              )}
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-slate-900 truncate">{currentUser.displayName}</p>
+              <p className="text-[11px] text-slate-500 truncate">{currentUser.email}</p>
+            </div>
+          </div>
           <button
             onClick={logout}
             className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-bold text-rose-600 hover:bg-rose-50 rounded-xl transition-colors cursor-pointer"
@@ -158,4 +206,3 @@ export const Sidebar: React.FC<SidebarProps> = ({
     </>
   );
 };
-

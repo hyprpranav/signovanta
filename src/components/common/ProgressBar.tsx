@@ -120,11 +120,14 @@ export const ProgressBar: React.FC<ProgressBarProps> = ({
             100% Verified
           </span>
           <span className="text-[11px] text-slate-400">
-            {isCompleted ? 'Completed' : 'Certificates Req.'}
+            {isCompleted
+              ? 'Completed'
+              : status === 'CERTIFICATE_SUBMITTED'
+              ? 'Awaiting final approval'
+              : 'Certificates required'}
           </span>
         </div>
       </div>
     </div>
   );
 };
-

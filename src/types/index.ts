@@ -63,6 +63,7 @@ export interface Student {
   fullName: string;
   email: string;
   mobile: string;
+  dateOfBirth?: string;
   department: string;
   academicYear: string; // e.g., "III Year"
   section: string;      // e.g., "III Year ECE A", "III Year ECE B", "III Year ECE C", "III Year ECE D"
@@ -137,12 +138,22 @@ export interface EventApplication {
   eventWebsite?: string;
   registrationLink?: string;
   eventDescription: string;
+  parentGuardianName?: string;
+  parentGuardianMobile?: string;
+  guideName?: string;
   participationType: ParticipationType;
   teamId?: string;
   teamName?: string;
+  teamSize?: number;
+  teamMembers?: Array<{
+    registrationNumber: string;
+    fullName: string;
+  }>;
   facultyCoordinator: string;
   brochureUrl?: string;
   brochurePublicId?: string;
+  browserUrl?: string;
+  browserPublicId?: string;
   supportingDocUrls?: string[];
   
   // Workflow & Status Tracking
@@ -163,6 +174,7 @@ export interface EventApplication {
   actualAttendanceMarked?: boolean;
   prizeWon?: boolean;
   prizeCategory?: string;
+  prizeName?: string;
   achievementDescription?: string;
   participationCertUrl?: string;
   winnerCertUrl?: string;
@@ -171,6 +183,9 @@ export interface EventApplication {
   completedAt?: string;
   completedBy?: string;
   completedByName?: string;
+  studentEditEnabledAt?: string;
+  studentEditEnabledBy?: string;
+  studentEditEnabledByName?: string;
   
   createdAt: string;
   updatedAt: string;
@@ -219,6 +234,8 @@ export interface ApprovalLog {
     | 'CORRECTION_REQUESTED'
     | 'REJECTED'
     | 'CERTIFICATES_UPLOADED'
+    | 'STUDENT_EDIT_ENABLED'
+    | 'EDITED'
     | 'COMPLETED';
   performedByUid: string;
   performedByName: string;
@@ -274,4 +291,3 @@ export interface AcademicSection {
   section: string; // e.g. "V Section", "A Section", "C Section"
   department: string;
 }
-

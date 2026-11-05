@@ -6,40 +6,41 @@ import { Modal } from '../../components/common/Modal';
 import { FirstTimeActivationModal } from '../../components/common/FirstTimeActivationModal';
 import { registerStaffRequest } from '../../services/firebase/authService';
 import {
-  ShieldCheck,
   Lock,
   User,
   Mail,
   AlertCircle,
-  Sparkles,
   CheckCircle2,
-  Flame,
   ArrowRight,
   GraduationCap,
   Briefcase,
   Phone,
   Building,
+  ShieldCheck,
+  Sparkles,
 } from 'lucide-react';
 
 interface LoginPageProps {
-  onOpenFirebaseGuide: () => void;
   onNavigateToStaffRegister?: () => void;
+  onBackToLanding?: () => void;
+  initialOpenRegister?: boolean;
 }
 
 export const LoginPage: React.FC<LoginPageProps> = ({
-  onOpenFirebaseGuide,
+  onBackToLanding,
+  initialOpenRegister = false,
 }) => {
   const { universalLogin, loginAsAdminBoomikaQuick, submitStudentRequest } = useAuth();
 
   // Single Unified Login Credentials
-  const [identifier, setIdentifier] = useState('927624BEC001');
-  const [password, setPassword] = useState('927624BEC001');
+  const [identifier, setIdentifier] = useState('');
+  const [password, setPassword] = useState('');
 
   // Activation Modal State for first-time student login
   const [activationStudent, setActivationStudent] = useState<Student | null>(null);
 
   // Registration Request Modal
-  const [showRequestModal, setShowRequestModal] = useState(false);
+  const [showRequestModal, setShowRequestModal] = useState(initialOpenRegister);
   const [requestType, setRequestType] = useState<'STUDENT' | 'STAFF'>('STUDENT');
 
   // Student Request Form State
@@ -65,6 +66,19 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   const [requestSuccessMessage, setRequestSuccessMessage] = useState<string | null>(null);
   const [requestErrorMessage, setRequestErrorMessage] = useState<string | null>(null);
 
+  // Quick 1-click login as Master Admin (Boomika)
+  const handleQuickAdminLogin = async () => {
+    setErrorMessage(null);
+    setIsQuickAdminLoading(true);
+    try {
+      await loginAsAdminBoomikaQuick();
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Quick admin login failed.');
+    } finally {
+      setIsQuickAdminLoading(false);
+    }
+  };
+
   // Single unified submission handler
   const handleUnifiedSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -80,19 +94,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       setErrorMessage(err.message || 'Authentication failed. Please verify your credentials.');
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  // 1-Click Master Admin Login
-  const handleQuickAdminLogin = async () => {
-    setErrorMessage(null);
-    setIsQuickAdminLoading(true);
-    try {
-      await loginAsAdminBoomikaQuick();
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Quick Admin login failed.');
-    } finally {
-      setIsQuickAdminLoading(false);
     }
   };
 
@@ -159,16 +160,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     }
   };
 
-  // Quick fill helper for testing authentic credentials
-  const fillSample = (id: string, pwd: string) => {
-    setIdentifier(id);
-    setPassword(pwd);
-    setErrorMessage(null);
-  };
-
   return (
     <div className="min-h-screen bg-slate-900 flex flex-col justify-between p-4 sm:p-6 text-slate-100">
-      {/* Top Bar with Branding & Cloud Setup Guide Pill */}
+      {/* Top Bar with Branding & Back to Home */}
       <div className="max-w-6xl w-full mx-auto flex items-center justify-between py-2">
         <div className="flex items-center gap-2.5">
           <div className="w-10 h-10 rounded-2xl bg-blue-600 text-white flex items-center justify-center font-black text-xl tracking-tight shadow-md">
@@ -184,13 +178,15 @@ export const LoginPage: React.FC<LoginPageProps> = ({
           </div>
         </div>
 
-        <button
-          onClick={onOpenFirebaseGuide}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-400/30 rounded-xl text-xs font-bold transition-colors cursor-pointer"
-        >
-          <Flame size={15} className="text-amber-400" />
-          <span>Cloud Setup Guide</span>
-        </button>
+        {onBackToLanding && (
+          <button
+            type="button"
+            onClick={onBackToLanding}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
+          >
+            <span>← Back to Home</span>
+          </button>
+        )}
       </div>
 
       {/* SINGLE UNIFIED LOGIN CARD */}
@@ -205,19 +201,19 @@ export const LoginPage: React.FC<LoginPageProps> = ({
               Sign In to SIGNOVANTA
             </h2>
             <p className="text-xs text-slate-500 font-medium">
-              Enter your credentials to access your dashboard automatically
+              M. Kumarasamy College of Engineering, Karur
             </p>
           </div>
 
-          {/* 1-Click Master Admin Login Button */}
+          {/* 1-Click Master Admin Login Button (Testing Key for Boomika) */}
           <div className="p-3 bg-gradient-to-r from-purple-50 via-indigo-50 to-blue-50 border border-purple-200/80 rounded-2xl space-y-2">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <ShieldCheck size={16} className="text-purple-600" />
-                <span className="text-xs font-bold text-purple-950">Master Admin Portal</span>
+                <span className="text-xs font-bold text-purple-950">Master Admin Testing Login</span>
               </div>
               <span className="text-[10px] font-bold text-purple-700 bg-purple-100/80 px-2 py-0.5 rounded-md">
-                Admin: Boomika
+                Boomika
               </span>
             </div>
             <Button
@@ -227,7 +223,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
               fullWidth
               isLoading={isQuickAdminLoading}
               onClick={handleQuickAdminLogin}
-              className="bg-purple-900 hover:bg-purple-950 text-white font-bold"
+              className="bg-purple-900 hover:bg-purple-950 text-white font-bold cursor-pointer"
             >
               <Sparkles size={14} className="mr-1.5 text-amber-300" />
               1-Click Master Admin Login (Boomika)
@@ -288,43 +284,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
               Sign In to Dashboard
             </Button>
 
-            {/* Quick Authentic Fill Chips */}
-            <div className="pt-2 border-t border-slate-100 space-y-1.5">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">
-                Quick Preset Authentic Logins:
-              </span>
-              <div className="grid grid-cols-2 gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => fillSample('927624BEC001', '927624BEC001')}
-                  className="p-1.5 text-[11px] font-mono bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-slate-700 font-semibold text-left truncate cursor-pointer"
-                >
-                  927624BEC001 (ECE A)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => fillSample('927624BEC190', '927624BEC190')}
-                  className="p-1.5 text-[11px] font-mono bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-slate-700 font-semibold text-left truncate cursor-pointer"
-                >
-                  927624BEC190 (ECE D)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => fillSample('priya.ece@college.edu', 'password123')}
-                  className="p-1.5 text-[11px] bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-slate-700 font-semibold text-left truncate cursor-pointer"
-                >
-                  Dr. Priya (AHOD ECE)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => fillSample('boomika@gmail.com', '927624')}
-                  className="p-1.5 text-[11px] bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg text-purple-900 font-semibold text-left truncate cursor-pointer"
-                >
-                  Boomika (Admin)
-                </button>
-              </div>
-            </div>
-
             {/* Registration Request Link */}
             <div className="text-center pt-2">
               <button
@@ -345,8 +304,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       </div>
 
       {/* Footer Info */}
-      <div className="text-center text-xs text-slate-500 py-3">
-        SIGNOVANTA • Electronics & Communication Engineering • 3rd Year Event Gateway
+      <div className="text-center text-xs text-slate-500 py-3 space-y-1">
+        <p>M. Kumarasamy College of Engineering, Karur • Department of Electronics and Communication Engineering</p>
+        <p className="text-slate-400">SIGNOVANTA 3rd Year Event Participation Gateway • Crafted with Pride by <strong className="text-slate-200">Boomika</strong></p>
       </div>
 
       {/* Mandatory First-Time Password Reset Modal */}

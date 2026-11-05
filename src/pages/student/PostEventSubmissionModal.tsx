@@ -35,6 +35,7 @@ export const PostEventSubmissionModal: React.FC<PostEventSubmissionModalProps> =
   );
   const [prizeWon, setPrizeWon] = useState<boolean>(application.prizeWon ?? false);
   const [prizeCategory, setPrizeCategory] = useState(application.prizeCategory || '1st Prize');
+  const [prizeName, setPrizeName] = useState(application.prizeName || '');
   const [achievementDescription, setAchievementDescription] = useState(
     application.achievementDescription || ''
   );
@@ -87,8 +88,12 @@ export const PostEventSubmissionModal: React.FC<PostEventSubmissionModalProps> =
       setError('Winner Certificate is strictly required when Prize Won is marked as Yes.');
       return;
     }
-    if (!prizeWon && !participationCertUrl) {
-      setError('Participation Certificate is required to verify your attendance.');
+    if (prizeWon && prizeCategory === 'Other' && !prizeName.trim()) {
+      setError('Please enter the prize name.');
+      return;
+    }
+    if (!participationCertUrl) {
+      setError('Participation Certificate is required for every 100% submission.');
       return;
     }
 
@@ -99,6 +104,7 @@ export const PostEventSubmissionModal: React.FC<PostEventSubmissionModalProps> =
         actualAttendanceMarked,
         prizeWon,
         prizeCategory: prizeWon ? prizeCategory : undefined,
+        prizeName: prizeWon && prizeCategory === 'Other' ? prizeName.trim() : undefined,
         achievementDescription: achievementDescription.trim(),
         participationCertUrl,
         winnerCertUrl: prizeWon ? winnerCertUrl : undefined,
@@ -212,8 +218,15 @@ export const PostEventSubmissionModal: React.FC<PostEventSubmissionModalProps> =
                   <option value="Consolation Prize">Consolation Prize</option>
                   <option value="Best Innovation Award">Best Innovation Award</option>
                   <option value="Special Jury Mention">Special Jury Mention</option>
+                  <option value="Other">Other</option>
                 </select>
               </div>
+              {prizeCategory === 'Other' && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Prize Name *</label>
+                  <input value={prizeName} onChange={(e) => setPrizeName(e.target.value)} required className="w-full px-3 py-2 text-xs bg-white border border-slate-300 rounded-xl" />
+                </div>
+              )}
 
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
@@ -272,12 +285,11 @@ export const PostEventSubmissionModal: React.FC<PostEventSubmissionModalProps> =
             </div>
           )}
 
-          {/* Participation Certificate (Required if Prize Won = No, or optional extra) */}
+          {/* Participation Certificate (Required for every 100% submission) */}
           <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
             <div className="flex items-center justify-between">
               <label className="text-xs font-bold text-slate-800 block">
-                Participation Certificate (Image or PDF){' '}
-                {!prizeWon && <span className="text-rose-500">*</span>}
+                Participation Certificate (Image or PDF) <span className="text-rose-500">*</span>
               </label>
               {participationCertUrl && (
                 <span className="text-[11px] font-bold text-emerald-700 flex items-center gap-1">
@@ -325,4 +337,3 @@ export const PostEventSubmissionModal: React.FC<PostEventSubmissionModalProps> =
     </Modal>
   );
 };
-

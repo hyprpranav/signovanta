@@ -1,6 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { usePresence } from '../../context/PresenceContext';
 import {
   Student,
   Staff,
@@ -18,6 +17,9 @@ import {
   getStudentRegistrationRequests,
   approveStudentRegistrationRequest,
   rejectStudentRegistrationRequest,
+  syncStudentsFromFirebase,
+  syncStaffFromFirebase,
+  updateStudentProfile,
 } from '../../services/firebase/authService';
 import {
   getAllApplications,
@@ -26,9 +28,22 @@ import {
   saveCategories,
   getAcademicSections,
   saveAcademicSections,
+  syncApplicationsFromFirebase,
   getApprovalLogs,
+  preApproveApplication,
+  completeEventApplication,
+  enableStudentApplicationEditing,
+  rejectApplication,
+  deleteApplication,
 } from '../../services/firebase/firestoreService';
+import { uploadToCloudinary } from '../../services/cloudinary/cloudinaryService';
 import { StudentDirectoryMonitor } from '../../components/monitoring/StudentDirectoryMonitor';
+import { WinnersCertificateShowcase } from '../../components/analytics/WinnersCertificateShowcase';
+import { EventParticipationAnalytics } from '../../components/analytics/EventParticipationAnalytics';
+import { ExportManagement } from '../../components/common/ExportManagement';
+import { SubmissionsPanel } from '../../components/common/SubmissionsPanel';
+import { DeleteThingsPanel } from '../../components/common/DeleteThingsPanel';
+import { EventOutcomeAnalytics } from '../../components/common/EventOutcomeAnalytics';
 import { Button } from '../../components/common/Button';
 import { Badge } from '../../components/common/Badge';
 import { Modal } from '../../components/common/Modal';
@@ -37,7 +52,6 @@ import {
   Users,
   Briefcase,
   FileText,
-  Radio,
   BarChart3,
   CheckCircle2,
   XCircle,
@@ -46,7 +60,6 @@ import {
   Download,
   AlertTriangle,
   Key,
-  ShieldCheck,
   Search,
   UserCheck,
   UserX,
@@ -54,12 +67,15 @@ import {
 } from 'lucide-react';
 import Papa from 'papaparse';
 
-export const AdminDashboard: React.FC = () => {
+interface AdminDashboardProps {
+  activeTab?: string;
+}
+
+export const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab: requestedTab }) => {
   const { currentUser } = useAuth();
-  const { summary } = usePresence();
 
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'students' | 'staff' | 'approvals' | 'events' | 'categories' | 'analytics' | 'audit'
+    'overview' | 'students' | 'staff' | 'approvals' | 'submissions' | 'events' | 'categories' | 'analytics' | 'exports' | 'delete_things'
   >('overview');
 
   const [students, setStudents] = useState<Student[]>(() => getLocalStudents());
@@ -68,12 +84,40 @@ export const AdminDashboard: React.FC = () => {
   const [applications, setApplications] = useState<EventApplication[]>(() => getAllApplications());
   const [categories, setCategories] = useState<EventCategory[]>(() => getCategories());
   const [sections, setSections] = useState<AcademicSection[]>(() => getAcademicSections());
-  const auditLogs = getApprovalLogs();
+
+  useEffect(() => {
+    const allowedTabs = new Set(['overview', 'students', 'staff', 'approvals', 'submissions', 'analytics', 'categories', 'exports', 'delete_things']);
+    if (requestedTab && allowedTabs.has(requestedTab)) {
+      setActiveTab(requestedTab as typeof activeTab);
+    }
+  }, [requestedTab]);
+
+  useEffect(() => {
+    void Promise.all([syncApplicationsFromFirebase(), syncStudentsFromFirebase(), syncStaffFromFirebase()])
+      .then(([remoteApplications, remoteStudents, remoteStaff]) => {
+        setApplications(remoteApplications);
+        setStudents(remoteStudents);
+        setStaffList(remoteStaff);
+      });
+  }, []);
+
+  useEffect(() => {
+    const refreshStudents = () => setStudents(getLocalStudents());
+    window.addEventListener('signovanta:student-updated', refreshStudents);
+    return () => window.removeEventListener('signovanta:student-updated', refreshStudents);
+  }, []);
 
   // Modals
   const [showAddStudentModal, setShowAddStudentModal] = useState(false);
   const [showBulkImportModal, setShowBulkImportModal] = useState(false);
   const [showRoleAssignModal, setShowRoleAssignModal] = useState<Staff | null>(null);
+  const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Student | null>(null);
+  const [deletePin, setDeletePin] = useState('');
+  const [deleteWarningAccepted, setDeleteWarningAccepted] = useState(false);
+  const [isEditingStudent, setIsEditingStudent] = useState(false);
+  const [studentEdit, setStudentEdit] = useState({ fullName: '', mobile: '', dateOfBirth: '', profilePhotoUrl: '', profilePhotoPublicId: '' });
+  const [isSavingStudent, setIsSavingStudent] = useState(false);
   const [assignedRoleChoice, setAssignedRoleChoice] = useState<'STAFF' | 'HOD' | 'AHOD'>('STAFF');
   const [assignedDeptChoice, setAssignedDeptChoice] = useState('Electronics & Communication Engineering');
 
@@ -171,7 +215,7 @@ export const AdminDashboard: React.FC = () => {
       id: `std_${norm.toLowerCase()}`,
       registrationNumber: norm,
       fullName: newName.trim(),
-      email: newEmail.trim() || `${norm.toLowerCase()}@college.edu`,
+      email: `${norm.toLowerCase()}@mkce.ac.in`,
       mobile: newMobile.trim() || '9800000000',
       department: 'Electronics & Communication Engineering',
       academicYear: newYear,
@@ -203,6 +247,47 @@ export const AdminDashboard: React.FC = () => {
       currentList[idx].status = newStatus;
       saveLocalStudents(currentList);
       setStudents([...currentList]);
+    }
+  };
+
+  const openStudentEditor = (student: Student) => {
+    setStudentEdit({
+      fullName: student.fullName,
+      mobile: student.mobile,
+      dateOfBirth: student.dateOfBirth || '',
+      profilePhotoUrl: student.profilePhotoUrl || '',
+      profilePhotoPublicId: student.profilePhotoPublicId || '',
+    });
+    setIsEditingStudent(true);
+  };
+
+  const handleStudentPhotoChange = async (file: File) => {
+    try {
+      const upload = await uploadToCloudinary(file, 'profile_photos');
+      setStudentEdit(current => ({ ...current, profilePhotoUrl: upload.url, profilePhotoPublicId: upload.publicId }));
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Profile image upload failed.');
+    }
+  };
+
+  const handleStudentProfileSave = async () => {
+    if (!selectedStudent || !studentEdit.fullName.trim()) return;
+    setIsSavingStudent(true);
+    try {
+      const updated = await updateStudentProfile(selectedStudent.id, {
+        fullName: studentEdit.fullName.trim(),
+        mobile: studentEdit.mobile.trim(),
+        dateOfBirth: studentEdit.dateOfBirth,
+        profilePhotoUrl: studentEdit.profilePhotoUrl,
+        profilePhotoPublicId: studentEdit.profilePhotoPublicId,
+      });
+      setStudents(current => current.map(student => student.id === updated.id ? updated : student));
+      setSelectedStudent(updated);
+      setIsEditingStudent(false);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'Student profile update failed.');
+    } finally {
+      setIsSavingStudent(false);
     }
   };
 
@@ -247,7 +332,7 @@ export const AdminDashboard: React.FC = () => {
               id: `std_${norm.toLowerCase()}`,
               registrationNumber: norm,
               fullName: row.fullName || row.name || row.Name || 'Student',
-              email: row.email || `${norm.toLowerCase()}@college.edu`,
+              email: `${norm.toLowerCase()}@mkce.ac.in`,
               mobile: row.mobile || row.phone || '9800000000',
               department: 'Electronics & Communication Engineering',
               academicYear: row.academicYear || row.year || 'III Year',
@@ -270,30 +355,9 @@ export const AdminDashboard: React.FC = () => {
     });
   };
 
-  // Export to CSV
+  // Open the dedicated export center from the overview action.
   const handleExportCSV = () => {
-    const csv = Papa.unparse(
-      students.map(s => ({
-        RegistrationNumber: s.registrationNumber,
-        FullName: s.fullName,
-        Department: s.department,
-        AcademicYear: s.academicYear,
-        Section: s.section,
-        Email: s.email,
-        Mobile: s.mobile,
-        Status: s.status,
-        Activated: s.isActivated ? 'YES' : 'NO',
-        EventCount: s.eventCount,
-      }))
-    );
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.setAttribute('download', `signovanta_ece_students_${Date.now()}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    setActiveTab('exports');
   };
 
   const pendingStaffCount = staffList.filter(s => s.approvalStatus === 'PENDING').length;
@@ -323,83 +387,22 @@ export const AdminDashboard: React.FC = () => {
 
         <div className="flex items-center gap-2">
           <Button
-            variant="outline"
+            variant="secondary"
             size="sm"
             onClick={handleExportCSV}
             leftIcon={<Download size={14} />}
-            className="text-white border-white/20 hover:bg-white/10"
+            className="shadow-md"
           >
             Export Directory CSV
           </Button>
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex bg-slate-100 p-1.5 rounded-2xl overflow-x-auto">
-        <button
-          onClick={() => setActiveTab('overview')}
-          className={`py-2 px-3 text-xs font-bold rounded-xl whitespace-nowrap cursor-pointer transition-all ${
-            activeTab === 'overview' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600'
-          }`}
-        >
-          Overview
-        </button>
-        <button
-          onClick={() => setActiveTab('students')}
-          className={`py-2 px-3 text-xs font-bold rounded-xl whitespace-nowrap cursor-pointer transition-all ${
-            activeTab === 'students' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600'
-          }`}
-        >
-          Students ({students.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('staff')}
-          className={`py-2 px-3 text-xs font-bold rounded-xl whitespace-nowrap cursor-pointer transition-all relative ${
-            activeTab === 'staff' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600'
-          }`}
-        >
-          Staff & Roles ({staffList.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('approvals')}
-          className={`py-2 px-3 text-xs font-bold rounded-xl whitespace-nowrap cursor-pointer transition-all relative ${
-            activeTab === 'approvals' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600'
-          }`}
-        >
-          Approvals & Requests
-          {totalPendingCount > 0 && (
-            <span className="ml-1.5 px-1.5 py-0.5 bg-rose-600 text-white text-[10px] rounded-full font-bold">
-              {totalPendingCount}
-            </span>
-          )}
-        </button>
-        <button
-          onClick={() => setActiveTab('events')}
-          className={`py-2 px-3 text-xs font-bold rounded-xl whitespace-nowrap cursor-pointer transition-all ${
-            activeTab === 'events' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600'
-          }`}
-        >
-          Events ({applications.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('categories')}
-          className={`py-2 px-3 text-xs font-bold rounded-xl whitespace-nowrap cursor-pointer transition-all ${
-            activeTab === 'categories' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600'
-          }`}
-        >
-          Categories
-        </button>
-        <button
-          onClick={() => setActiveTab('audit')}
-          className={`py-2 px-3 text-xs font-bold rounded-xl whitespace-nowrap cursor-pointer transition-all ${
-            activeTab === 'audit' ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600'
-          }`}
-        >
-          Audit Logs
-        </button>
-      </div>
-
       {/* Tab: Overview Metrics */}
+      {activeTab === 'exports' && (
+        <ExportManagement students={students} staff={staffList} applications={applications} isMasterAdmin />
+      )}
+
       {activeTab === 'overview' && (
         <div className="space-y-5">
           {/* Top 5 Metrics */}
@@ -409,10 +412,10 @@ export const AdminDashboard: React.FC = () => {
                 Total ECE Students
               </span>
               <span className="text-2xl font-black text-slate-900 mt-1 block">
-                {summary.total}
+                {students.length}
               </span>
               <span className="text-[11px] text-emerald-600 font-bold">
-                {summary.online} Online right now
+                {students.filter(student => student.isActivated || student.status === 'ACTIVE').length} Login success
               </span>
             </div>
 
@@ -451,6 +454,96 @@ export const AdminDashboard: React.FC = () => {
             </div>
           </div>
 
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4">
+              <span className="text-[11px] font-bold text-blue-700 uppercase tracking-wider block">Participating Students</span>
+              <span className="text-2xl font-black text-blue-900 mt-1 block">
+                {new Set(applications.map(app => app.studentRegNo)).size}
+              </span>
+              <span className="text-[11px] text-blue-700">Students with event submissions</span>
+            </div>
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
+              <span className="text-[11px] font-bold text-amber-700 uppercase tracking-wider block">Awaiting Action</span>
+              <span className="text-2xl font-black text-amber-900 mt-1 block">
+                {applications.filter(app => ['SUBMITTED', 'UNDER_REVIEW', 'CERTIFICATE_SUBMITTED', 'FINAL_VERIFICATION', 'CORRECTION_REQUIRED'].includes(app.status)).length}
+              </span>
+              <span className="text-[11px] text-amber-700">Applications in review</span>
+            </div>
+            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4">
+              <span className="text-[11px] font-bold text-emerald-700 uppercase tracking-wider block">Activated Accounts</span>
+              <span className="text-2xl font-black text-emerald-900 mt-1 block">
+                {students.filter(student => student.isActivated || student.status === 'ACTIVE').length}
+              </span>
+              <span className="text-[11px] text-emerald-700">Students who signed in</span>
+            </div>
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
+              <span className="text-[11px] font-bold text-amber-700 uppercase tracking-wider block">Winning Students</span>
+              <span className="text-2xl font-black text-amber-900 mt-1 block">
+                {new Set(applications.filter(app => app.prizeWon).map(app => app.studentRegNo)).size}
+              </span>
+              <span className="text-[11px] text-amber-700">Students with winning certificates</span>
+            </div>
+            <div className="bg-purple-50 border border-purple-200 rounded-2xl p-4">
+              <span className="text-[11px] font-bold text-purple-700 uppercase tracking-wider block">Categories</span>
+              <span className="text-2xl font-black text-purple-900 mt-1 block">{categories.length}</span>
+              <span className="text-[11px] text-purple-700">Available event categories</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div className="bg-white rounded-3xl border border-slate-200 p-5">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-sm font-bold text-slate-900">Students by Section</h2>
+                  <p className="text-xs text-slate-500">Current student database distribution</p>
+                </div>
+                <GraduationCap size={20} className="text-blue-600" />
+              </div>
+              <div className="space-y-3">
+                {Array.from(new Set(students.map(student => student.section).filter(Boolean))).sort().map(section => {
+                  const count = students.filter(student => student.section === section).length;
+                  const width = students.length ? Math.max((count / students.length) * 100, 4) : 0;
+                  return (
+                    <div key={section}>
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="font-semibold text-slate-700">{section.trim().split(/\s+/).pop()}</span>
+                        <span className="font-bold text-slate-500">{count}</span>
+                      </div>
+                      <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+                        <div className="h-full rounded-full bg-blue-600" style={{ width: `${width}%` }} />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="bg-white rounded-3xl border border-slate-200 p-5">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-sm font-bold text-slate-900">Recent Event Activity</h2>
+                  <p className="text-xs text-slate-500">Latest submissions and workflow status</p>
+                </div>
+                <FileText size={20} className="text-purple-600" />
+              </div>
+              {applications.length === 0 ? (
+                <p className="text-xs text-slate-500 py-6 text-center">No event activity recorded yet.</p>
+              ) : (
+                <div className="space-y-2.5">
+                  {[...applications].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 5).map(app => (
+                    <div key={app.id} className="flex items-center justify-between gap-3 p-2.5 rounded-xl bg-slate-50">
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-slate-800 truncate">{app.studentName} • {app.eventName}</p>
+                        <p className="text-[11px] text-slate-500">{new Date(app.createdAt).toLocaleString()}</p>
+                      </div>
+                      <Badge status={app.status} size="sm" />
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
           {/* Pending Approvals Alert Banner */}
           {totalPendingCount > 0 && (
             <div className="bg-amber-50 border border-amber-200 rounded-3xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -471,15 +564,13 @@ export const AdminDashboard: React.FC = () => {
             </div>
           )}
 
-          {/* Live Presence Table */}
-          <div className="space-y-3">
-            <h2 className="text-base font-bold text-slate-900">Live Presence Directory</h2>
-            <StudentDirectoryMonitor
-              isAdminView
-              onToggleSuspend={handleToggleSuspendStudent}
-              onResetPassword={handleResetPassword}
-            />
-          </div>
+          {/* Hall of Fame & Winner Certificates Showcase */}
+          <WinnersCertificateShowcase
+            applications={applications}
+            title="🏆 Hall of Fame & Winner Certificates (3rd Year ECE)"
+            subtitle="Verified prize winners, trophies and certificates across all academic sections"
+          />
+
         </div>
       )}
 
@@ -520,10 +611,99 @@ export const AdminDashboard: React.FC = () => {
 
           <StudentDirectoryMonitor
             isAdminView
+            onSelectStudent={setSelectedStudent}
             onToggleSuspend={handleToggleSuspendStudent}
             onResetPassword={handleResetPassword}
+            onRequestDelete={student => setDeleteTarget(student)}
+            applications={applications}
           />
         </div>
+      )}
+
+      {activeTab === 'delete_things' && (
+        <DeleteThingsPanel
+          students={students}
+          staff={staffList}
+          onRequestStudentDelete={setDeleteTarget}
+        />
+      )}
+
+      {activeTab === 'submissions' && (
+        <SubmissionsPanel
+          applications={applications}
+          editorUid={currentUser?.uid || 'master-admin'}
+          editorName={currentUser?.displayName || 'Master Admin'}
+          editorRole="MASTER_ADMIN"
+          onUpdate={updated => setApplications(current => current.map(item => item.id === updated.id ? updated : item))}
+          onEnableStudentEdit={application => {
+            try {
+              const updated = enableStudentApplicationEditing(
+                application.id,
+                currentUser?.uid || 'master-admin',
+                currentUser?.displayName || 'Master Admin',
+                'MASTER_ADMIN'
+              );
+              setApplications(current => current.map(item => item.id === updated.id ? updated : item));
+            } catch (error) {
+              alert(error instanceof Error ? error.message : 'Unable to enable student editing.');
+            }
+          }}
+          onApprove={application => {
+            try {
+              const updated = preApproveApplication(
+                application.id,
+                currentUser?.uid || 'master-admin',
+                currentUser?.displayName || 'Master Admin',
+                'MASTER_ADMIN',
+                'Approved by Master Admin from Submissions.'
+              );
+              setApplications(current => current.map(item => item.id === updated.id ? updated : item));
+            } catch (error) {
+              alert(error instanceof Error ? error.message : 'Approval failed.');
+            }
+          }}
+          onComplete={application => {
+            const remarks = window.prompt('Final verification remarks:');
+            if (remarks === null) return;
+            try {
+              const updated = completeEventApplication(
+                application.id,
+                currentUser?.uid || 'master-admin',
+                currentUser?.displayName || 'Master Admin',
+                'MASTER_ADMIN',
+                remarks || 'Certificates verified by Master Admin. Event marked 100% completed.'
+              );
+              setApplications(current => current.map(item => item.id === updated.id ? updated : item));
+            } catch (error) {
+              alert(error instanceof Error ? error.message : 'Final verification failed.');
+            }
+          }}
+          onReject={application => {
+            const remarks = window.prompt('Reason for rejecting this submission:');
+            if (remarks === null) return;
+            try {
+              const updated = rejectApplication(
+                application.id,
+                currentUser?.uid || 'master-admin',
+                currentUser?.displayName || 'Master Admin',
+                'MASTER_ADMIN',
+                remarks || 'Rejected by Master Admin.'
+              );
+              setApplications(current => current.map(item => item.id === updated.id ? updated : item));
+            } catch (error) {
+              alert(error instanceof Error ? error.message : 'Rejection failed.');
+            }
+          }}
+          onDelete={async application => {
+            if (!window.confirm(`Delete the rejected submission "${application.eventName}"?`)) return;
+            try {
+              await deleteApplication(application.id);
+              setApplications(current => current.filter(item => item.id !== application.id));
+            } catch (error) {
+              alert(error instanceof Error ? error.message : 'Deletion failed.');
+            }
+          }}
+        />
       )}
 
       {/* Tab: Approvals & Requests Queue */}
@@ -668,16 +848,25 @@ export const AdminDashboard: React.FC = () => {
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-base font-bold text-slate-900">
-                ECE Faculty Directory & Privilege Authorization
+                ECE Faculty Directory
               </h2>
               <p className="text-xs text-slate-500">
-                Assign STAFF, HOD, or AHOD permissions upon verification
+                Available staff members and role requests
               </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {staffList.map((stf) => (
+          <section className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-slate-900">Available Staff ({staffList.filter(stf => stf.approvalStatus !== 'PENDING').length})</h3>
+            </div>
+            {staffList.filter(stf => stf.approvalStatus !== 'PENDING').length === 0 ? (
+              <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-8 text-center text-xs text-slate-500">
+                No approved staff members available.
+              </div>
+            ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {staffList.filter(stf => stf.approvalStatus !== 'PENDING').map((stf) => (
               <div
                 key={stf.id}
                 className="bg-white rounded-3xl border border-slate-200 shadow-xs p-5 space-y-3"
@@ -771,11 +960,228 @@ export const AdminDashboard: React.FC = () => {
                 </div>
               </div>
             ))}
-          </div>
+            </div>
+            )}
+          </section>
+
+          <section className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-slate-900">Staff Requests ({pendingStaffCount})</h3>
+              <span className="text-xs text-slate-500">Pending role authorization</span>
+            </div>
+            {pendingStaffCount === 0 ? (
+              <div className="bg-white rounded-2xl border border-dashed border-slate-300 p-8 text-center text-xs text-slate-500">
+                No pending staff requests.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {staffList.filter(stf => stf.approvalStatus === 'PENDING').map(stf => (
+                  <div key={stf.id} className="bg-amber-50 rounded-3xl border border-amber-200 p-5 space-y-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-sm font-bold text-slate-900">{stf.fullName}</h3>
+                        <p className="text-xs text-slate-600">{stf.email}</p>
+                        <p className="text-xs font-semibold text-blue-700 mt-1">{stf.department} • {stf.designation}</p>
+                      </div>
+                      <span className="text-[10px] font-bold text-amber-800 bg-white px-2 py-1 rounded-lg border border-amber-300">Request</span>
+                    </div>
+                    <p className="text-xs text-slate-600">Requested role: <strong>{stf.requestedRole}</strong></p>
+                    <div className="flex gap-2">
+                      <Button variant="primary" size="sm" onClick={() => {
+                        setShowRoleAssignModal(stf);
+                        setAssignedRoleChoice(stf.requestedRole);
+                        setAssignedDeptChoice('Electronics & Communication Engineering');
+                      }} className="flex-1">Review Request</Button>
+                      <Button variant="ghost" size="sm" onClick={() => handleRejectStaff(stf.id)} className="text-rose-600 hover:bg-rose-50">Reject</Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
         </div>
       )}
 
-      {/* Tab: Events */}
+      {/* Tab: Analytics */}
+      {activeTab === 'analytics' && (
+        <div className="space-y-6">
+          {/* Mathematical Analytics with Pie Chart, Section Comparative Bar Graph, and Event-Wise Winning Table */}
+          <EventParticipationAnalytics students={students} applications={applications} isStaffOrAdminView />
+
+          <EventOutcomeAnalytics applications={applications} />
+          {(() => {
+            const participatedStudentIds = new Set(applications.map(app => app.studentRegNo));
+            const participated = students.filter(student => participatedStudentIds.has(student.registrationNumber)).length;
+            const notParticipated = Math.max(students.length - participated, 0);
+            const activated = students.filter(student => student.isActivated || student.status === 'ACTIVE').length;
+            const notActivated = Math.max(students.length - activated, 0);
+            const participationPercent = students.length ? Math.round((participated / students.length) * 100) : 0;
+            const activationPercent = students.length ? Math.round((activated / students.length) * 100) : 0;
+            const sectionAnalytics = Array.from(new Set(students.map(student => student.section).filter(Boolean))).map(section => {
+              const sectionStudents = students.filter(student => student.section === section);
+              const sectionParticipated = sectionStudents.filter(student => participatedStudentIds.has(student.registrationNumber)).length;
+              return { section, total: sectionStudents.length, participated: sectionParticipated, percent: sectionStudents.length ? Math.round((sectionParticipated / sectionStudents.length) * 100) : 0 };
+            }).sort((a, b) => b.participated - a.participated);
+            const statusAnalytics = [
+              ['Submitted', applications.filter(app => app.status === 'SUBMITTED').length, 'bg-blue-500'],
+              ['Pre-approved', applications.filter(app => app.status === 'PRE_APPROVED').length, 'bg-indigo-500'],
+              ['Certificate pending', applications.filter(app => app.status === 'CERTIFICATE_SUBMITTED').length, 'bg-amber-500'],
+              ['Completed', applications.filter(app => app.status === 'COMPLETED').length, 'bg-emerald-500'],
+              ['Rejected', applications.filter(app => app.status === 'REJECTED').length, 'bg-rose-500'],
+            ] as const;
+            const eventAnalytics = Array.from(new Set(applications.map(app => app.eventName).filter(Boolean))).map(eventName => ({
+              eventName,
+              count: applications.filter(app => app.eventName === eventName).length,
+            })).sort((a, b) => b.count - a.count).slice(0, 5);
+            const maxEventCount = Math.max(...eventAnalytics.map(item => item.count), 1);
+            const categoryAnalytics = Array.from(new Set(applications.map(app => app.eventCategory).filter(Boolean))).map(category => ({
+              category,
+              count: applications.filter(app => app.eventCategory === category).length,
+            })).sort((a, b) => b.count - a.count);
+            const maxCategoryCount = Math.max(...categoryAnalytics.map(item => item.count), 1);
+
+            return (
+              <>
+                <div>
+                  <h2 className="text-base font-bold text-slate-900">Student Analytics</h2>
+                  <p className="text-xs text-slate-500">Participation and account activation from current student records.</p>
+                </div>
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                  {[
+                    ['Total Students', students.length, 'text-slate-900'],
+                    ['Participated', participated, 'text-blue-700'],
+                    ['Not Participated', notParticipated, 'text-amber-700'],
+                    ['Activated', activated, 'text-emerald-700'],
+                  ].map(([label, value, color]) => (
+                    <div key={String(label)} className="bg-white rounded-2xl border border-slate-200 p-4">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">{label}</span>
+                      <strong className={`block text-2xl font-black mt-1 ${color}`}>{value}</strong>
+                    </div>
+                  ))}
+                </div>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div className="bg-white rounded-3xl border border-slate-200 p-5">
+                    <h3 className="text-sm font-bold text-slate-900">Participation Overview</h3>
+                    <div className="mt-5 flex items-center gap-6">
+                      <div
+                        className="w-32 h-32 rounded-full shrink-0"
+                        style={{ background: `conic-gradient(#2563eb 0 ${participationPercent}%, #fbbf24 ${participationPercent}% 100%)` }}
+                        aria-label={`Participation: ${participationPercent}%`}
+                      />
+                      <div className="space-y-3 text-xs">
+                        <p><span className="inline-block w-3 h-3 rounded-full bg-blue-600 mr-2" />Participated: <strong>{participated}</strong></p>
+                        <p><span className="inline-block w-3 h-3 rounded-full bg-amber-400 mr-2" />Not participated: <strong>{notParticipated}</strong></p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="bg-white rounded-3xl border border-slate-200 p-5">
+                    <h3 className="text-sm font-bold text-slate-900">Account Activation</h3>
+                    <div className="mt-5 flex items-end gap-8 h-32">
+                      {[
+                        ['Activated', activated, 'bg-emerald-500'],
+                        ['Awaiting First Login', notActivated, 'bg-slate-300'],
+                      ].map(([label, value, color]) => (
+                        <div key={String(label)} className="flex-1 h-full flex flex-col items-center justify-end gap-2">
+                          <strong className="text-sm text-slate-700">{value}</strong>
+                          <div className={`w-full max-w-[90px] rounded-t-xl ${color}`} style={{ height: `${Math.max((Number(value) / Math.max(students.length, 1)) * 100, value === 0 ? 2 : 8)}%` }} />
+                          <span className="text-[11px] text-slate-500 text-center">{label}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-xs text-slate-500 mt-4">{activationPercent}% of students have activated their account by signing in.</p>
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <section className="bg-white rounded-3xl border border-slate-200 p-5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-sm font-bold text-slate-900">Participation by Section</h3>
+                        <p className="text-xs text-slate-500 mt-1">Compare student engagement across sections.</p>
+                      </div>
+                      <span className="rounded-full bg-blue-50 px-2.5 py-1 text-[11px] font-bold text-blue-700">{sectionAnalytics.length} sections</span>
+                    </div>
+                    <div className="mt-4 space-y-3">
+                      {sectionAnalytics.length === 0 ? <p className="text-xs text-slate-500">No section data available.</p> : sectionAnalytics.map(item => (
+                        <div key={item.section}>
+                          <div className="mb-1 flex items-center justify-between text-xs">
+                            <span className="font-bold text-slate-700">{item.section.trim().split(/\s+/).pop()}</span>
+                            <span className="text-slate-500">{item.participated}/{item.total} ({item.percent}%)</span>
+                          </div>
+                          <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                            <div className="h-full rounded-full bg-blue-500 transition-all" style={{ width: `${item.percent}%` }} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                  <section className="bg-white rounded-3xl border border-slate-200 p-5">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-sm font-bold text-slate-900">Popular Event Categories</h3>
+                        <p className="text-xs text-slate-500 mt-1">What type of events students participate in most.</p>
+                      </div>
+                      <span className="rounded-full bg-purple-50 px-2.5 py-1 text-[11px] font-bold text-purple-700">{categoryAnalytics.length} categories</span>
+                    </div>
+                    <div className="mt-4 space-y-3">
+                      {categoryAnalytics.length === 0 ? <p className="text-xs text-slate-500">No category participation data available.</p> : categoryAnalytics.map(item => (
+                        <div key={item.category}>
+                          <div className="mb-1 flex items-center justify-between gap-3 text-xs">
+                            <span className="truncate font-bold text-slate-700">{item.category}</span>
+                            <span className="shrink-0 text-slate-500">{item.count} {item.count === 1 ? 'application' : 'applications'}</span>
+                          </div>
+                          <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                            <div className="h-full rounded-full bg-purple-500 transition-all" style={{ width: `${(item.count / maxCategoryCount) * 100}%` }} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                  <section className="bg-white rounded-3xl border border-slate-200 p-5">
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900">Application Workflow</h3>
+                      <p className="text-xs text-slate-500 mt-1">Current workload by approval stage.</p>
+                    </div>
+                    <div className="mt-4 space-y-3">
+                      {statusAnalytics.map(([label, value, color]) => (
+                        <div key={label} className="flex items-center gap-3">
+                          <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${color}`} />
+                          <span className="min-w-0 flex-1 truncate text-xs font-semibold text-slate-700">{label}</span>
+                          <strong className="text-sm text-slate-900">{value}</strong>
+                        </div>
+                      ))}
+                      {applications.length === 0 && <p className="text-xs text-slate-500">No applications available.</p>}
+                    </div>
+                  </section>
+                </div>
+                <section className="bg-white rounded-3xl border border-slate-200 p-5">
+                  <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900">Most Active Events</h3>
+                      <p className="text-xs text-slate-500 mt-1">Events receiving the highest number of student applications.</p>
+                    </div>
+                    <span className="text-xs font-semibold text-slate-400">Top 5</span>
+                  </div>
+                  <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+                    {eventAnalytics.length === 0 ? <p className="text-xs text-slate-500">No event applications available.</p> : eventAnalytics.map(item => (
+                      <div key={item.eventName} className="rounded-xl border border-slate-100 bg-slate-50 p-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="truncate text-xs font-bold text-slate-800">{item.eventName}</span>
+                          <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[11px] font-bold text-blue-700">{item.count}</span>
+                        </div>
+                        <div className="mt-2 h-2 overflow-hidden rounded-full bg-white">
+                          <div className="h-full rounded-full bg-indigo-500" style={{ width: `${(item.count / maxEventCount) * 100}%` }} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              </>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* Legacy event listing retained for existing application data */}
       {activeTab === 'events' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
@@ -867,50 +1273,131 @@ export const AdminDashboard: React.FC = () => {
         </div>
       )}
 
-      {/* Tab: Audit Logs */}
-      {activeTab === 'audit' && (
-        <div className="space-y-3">
-          <h2 className="text-base font-bold text-slate-900">Tamper-Proof Audit Trail</h2>
-          <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase text-[11px]">
-                    <th className="py-3 px-4">Timestamp</th>
-                    <th className="py-3 px-4">App ID</th>
-                    <th className="py-3 px-4">Action</th>
-                    <th className="py-3 px-4">Actor</th>
-                    <th className="py-3 px-4">Remarks</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {auditLogs.map((log) => (
-                    <tr key={log.id} className="hover:bg-slate-50">
-                      <td className="py-3 px-4 text-slate-500 whitespace-nowrap">
-                        {new Date(log.timestamp).toLocaleString()}
-                      </td>
-                      <td className="py-3 px-4 font-mono font-bold text-slate-800">
-                        {log.applicationNumber}
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-800">
-                          {log.action}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4">
-                        <span className="font-bold text-slate-800 block">{log.performedByName}</span>
-                        <span className="text-[10px] text-slate-400 font-semibold">{log.performedByRole}</span>
-                      </td>
-                      <td className="py-3 px-4 text-slate-600 max-w-xs truncate">
-                        {log.remarks}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+      {deleteTarget && (
+        <Modal
+          isOpen={true}
+          onClose={() => {
+            setDeleteTarget(null);
+            setDeletePin('');
+            setDeleteWarningAccepted(false);
+          }}
+          title="Delete Student Data"
+          subtitle="Two warnings are required before continuing"
+          maxWidth="md"
+        >
+          <div className="space-y-4">
+            <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
+              <p className="text-sm font-bold text-rose-900">Warning 1: This action is destructive</p>
+              <p className="mt-1 text-xs leading-5 text-rose-800">
+                This request targets all data associated with {deleteTarget.fullName} ({deleteTarget.registrationNumber}), including submitted event records.
+              </p>
             </div>
+            <label className="flex items-start gap-2 text-xs font-semibold text-slate-700">
+              <input type="checkbox" checked={deleteWarningAccepted} onChange={event => setDeleteWarningAccepted(event.target.checked)} className="mt-0.5" />
+              I understand that this student data cannot be recovered.
+            </label>
+            {deleteWarningAccepted && (
+              <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+                <p className="text-sm font-bold text-amber-900">Warning 2: Confirm with the secret PIN</p>
+                <p className="text-xs leading-5 text-amber-800">Enter the secret PIN to verify authorization. The PIN is never displayed.</p>
+                <input type="password" value={deletePin} onChange={event => setDeletePin(event.target.value)} placeholder="Secret PIN" className="w-full rounded-xl border border-amber-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" />
+                <button type="button" disabled={!deletePin} onClick={() => { setDeleteTarget(null); setDeletePin(''); setDeleteWarningAccepted(false); }} className="w-full rounded-xl bg-slate-300 px-3 py-2.5 text-xs font-bold text-slate-600 disabled:cursor-not-allowed">
+                  Confirm Delete Request
+                </button>
+                <p className="text-[11px] font-semibold text-amber-800">UI-only mode: no data will be deleted.</p>
+              </div>
+            )}
           </div>
-        </div>
+        </Modal>
+      )}
+
+      {/* Staff Role Assignment Modal */}
+      {selectedStudent && (
+        <Modal
+          isOpen={true}
+          onClose={() => setSelectedStudent(null)}
+          title={`Student Details: ${selectedStudent.fullName}`}
+          subtitle={`${selectedStudent.registrationNumber} • ${selectedStudent.department}`}
+          maxWidth="xl"
+        >
+          <div className="space-y-4">
+            <div className="flex items-center justify-between rounded-2xl bg-slate-900 p-4 text-white">
+              <div className="flex items-center gap-3">
+                <div className="h-12 w-12 overflow-hidden rounded-full bg-white/10 flex items-center justify-center">
+                  {selectedStudent.profilePhotoUrl ? <img src={selectedStudent.profilePhotoUrl} alt="" className="h-full w-full object-cover" /> : <GraduationCap size={22} />}
+                </div>
+                <div>
+                  <p className="text-sm font-bold">{selectedStudent.fullName}</p>
+                  <p className="text-xs text-slate-300">{selectedStudent.registrationNumber} • {selectedStudent.section}</p>
+                </div>
+              </div>
+              <Button variant="secondary" size="sm" onClick={() => openStudentEditor(selectedStudent)}>Edit Student</Button>
+            </div>
+            {isEditingStudent && (
+              <div className="rounded-2xl border border-blue-200 bg-blue-50 p-4 space-y-3">
+                <h3 className="text-sm font-bold text-slate-900">Edit Student Profile</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <label className="text-xs font-semibold text-slate-600">Name<input value={studentEdit.fullName} onChange={event => setStudentEdit(current => ({ ...current, fullName: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs" /></label>
+                  <label className="text-xs font-semibold text-slate-600">Phone<input value={studentEdit.mobile} onChange={event => setStudentEdit(current => ({ ...current, mobile: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs" /></label>
+                  <label className="text-xs font-semibold text-slate-600">Date of Birth<input type="date" value={studentEdit.dateOfBirth} onChange={event => setStudentEdit(current => ({ ...current, dateOfBirth: event.target.value }))} className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs" /></label>
+                  <label className="text-xs font-semibold text-slate-600">Profile Image<input type="file" accept="image/*" onChange={event => event.target.files?.[0] && void handleStudentPhotoChange(event.target.files[0])} className="mt-1 w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-xs" /></label>
+                </div>
+                <p className="text-[11px] text-slate-500">Registration number is fixed and cannot be edited.</p>
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" size="sm" onClick={() => setIsEditingStudent(false)}>Cancel</Button>
+                  <Button variant="primary" size="sm" isLoading={isSavingStudent} onClick={handleStudentProfileSave}>Save Changes</Button>
+                </div>
+              </div>
+            )}
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {[
+                ['Name', selectedStudent.fullName, false],
+                ['Register Number', selectedStudent.registrationNumber, true],
+                ['Phone Number', selectedStudent.mobile || 'Not provided', false],
+                ['Email Address', selectedStudent.email || 'Not provided', false],
+                ['Last Login', selectedStudent.lastLoginAt ? new Date(selectedStudent.lastLoginAt).toLocaleString() : 'Never', false],
+                ['Events Participated', String(selectedStudent.eventCount || 0), false],
+              ].map(([label, value, mono]) => (
+                <div key={label as string} className="rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+                  <p className={`mt-1 break-words text-sm font-bold text-slate-900 ${mono ? 'font-mono' : ''}`}>{value}</p>
+                </div>
+              ))}
+            </div>
+            <section className="overflow-hidden rounded-2xl border border-slate-200">
+              <div className="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3">
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Submitted Events & Documents</h3>
+                  <p className="mt-0.5 text-xs text-slate-500">Submissions, approvals, activity logs, and uploaded files</p>
+                </div>
+                <span className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-bold text-blue-700">
+                  {applications.filter(app => app.studentRegNo === selectedStudent.registrationNumber).length}
+                </span>
+              </div>
+              <div className="space-y-3 p-4">
+              {applications.filter(app => app.studentRegNo === selectedStudent.registrationNumber).map(app => (
+                <div key={app.id} className="rounded-xl border border-slate-200 bg-white p-3 text-xs shadow-sm space-y-2">
+                  <div className="flex items-center justify-between gap-2"><strong>{app.eventName}</strong><Badge status={app.status} /></div>
+                  <p className="text-slate-500">Submitted: {new Date(app.createdAt).toLocaleString()} • Pre-approval: {app.preApprovedAt ? `${app.preApprovedByName || 'Staff'} at ${new Date(app.preApprovedAt).toLocaleString()}` : 'Pending'} • Final: {app.completedAt ? `${app.completedByName || 'Staff'} at ${new Date(app.completedAt).toLocaleString()}` : 'Pending'}</p>
+                  <div className="border-t border-slate-200 pt-2 space-y-1">
+                    <p className="font-bold text-slate-700">Activity Log</p>
+                    {getApprovalLogs(app.id).map(log => <p key={log.id} className="text-[11px] text-slate-500">{new Date(log.timestamp).toLocaleString()} • {log.action} • {log.performedByName} ({log.performedByRole}){log.remarks ? ` — ${log.remarks}` : ''}</p>)}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {[['Browser', app.browserUrl], ['Brochure', app.brochureUrl], ['Participation certificate', app.participationCertUrl], ['Winner certificate', app.winnerCertUrl]].filter(([, url]) => Boolean(url)).map(([label, url]) => <a key={label} href={url} target="_blank" rel="noopener noreferrer" download className="px-2.5 py-1.5 bg-white border border-blue-200 text-blue-700 rounded-lg font-bold">{label}</a>)}
+                  </div>
+                </div>
+              ))}
+              {applications.filter(app => app.studentRegNo === selectedStudent.registrationNumber).length === 0 && (
+                <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-4 py-7 text-center">
+                  <p className="text-sm font-semibold text-slate-700">No event submissions found</p>
+                  <p className="mt-1 text-xs text-slate-500">Submitted events and uploaded documents will appear here.</p>
+                </div>
+              )}
+              </div>
+            </section>
+          </div>
+        </Modal>
       )}
 
       {/* Staff Role Assignment Modal */}

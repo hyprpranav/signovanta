@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { PresenceProvider } from './context/PresenceContext';
+import { LandingPage } from './pages/landing/LandingPage';
 import { LoginPage } from './pages/auth/LoginPage';
 import { StaffRegisterPage } from './pages/auth/StaffRegisterPage';
 import { TopNavbar } from './components/navigation/TopNavbar';
@@ -9,20 +10,125 @@ import { StudentDashboard } from './pages/student/StudentDashboard';
 import { NewEventForm } from './pages/student/NewEventForm';
 import { StudentProfileView } from './pages/student/StudentProfileView';
 import { StudentApplicationsView } from './pages/student/StudentApplicationsView';
-import { TeamFormationView } from './pages/student/TeamFormationView';
 import { StaffDashboard } from './pages/staff/StaffDashboard';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
 import { FirebaseSetupGuideModal } from './components/common/FirebaseSetupGuideModal';
 import { NotificationDrawer } from './components/notifications/NotificationDrawer';
+import { SupportIssuesView } from './components/common/SupportIssuesView';
 import { EventApplication } from './types';
+import { CelebrationModal } from './components/common/CelebrationModal';
+import {
+  getUserNotifications,
+  markNotificationAsRead,
+  getApplicationsForStudent,
+} from './services/firebase/firestoreService';
 
 const MainAppLayout: React.FC = () => {
   const { currentUser, isLoading } = useAuth();
-  const [authView, setAuthView] = useState<'login' | 'staff_register'>('login');
+  const [authView, setAuthView] = useState<'landing' | 'login' | 'staff_register'>('landing');
+  const [initialRegister, setInitialRegister] = useState(false);
   const [currentTab, setCurrentTab] = useState('dashboard');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [showFirebaseGuide, setShowFirebaseGuide] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [celebration, setCelebration] = useState<{
+    id: string;
+    title: string;
+    message: string;
+    approvedByName?: string;
+    isWinner?: boolean;
+    actionText?: string;
+    onAction?: () => void;
+  } | null>(null);
+  const roleForTab = currentUser?.role;
+  const defaultTabForUser = roleForTab === 'MASTER_ADMIN'
+    ? 'overview'
+    : roleForTab && ['STAFF', 'HOD', 'AHOD'].includes(roleForTab)
+    ? 'approvals'
+    : 'dashboard';
+
+  useEffect(() => {
+    setCurrentTab(defaultTabForUser);
+    setIsMobileSidebarOpen(false);
+  }, [currentUser?.uid, roleForTab, defaultTabForUser]);
+
+  useEffect(() => {
+    if (!currentUser) {
+      setCelebration(null);
+      return;
+    }
+    const seenKey = 'signovanta_celebrations_seen';
+    const seen = new Set(JSON.parse(localStorage.getItem(seenKey) || '[]') as string[]);
+
+    // If student, check for approved / winning events
+    if (currentUser.role === 'STUDENT' && currentUser.registrationNumber) {
+      const studentApps = getApplicationsForStudent(currentUser.registrationNumber);
+
+      // Check 1: Winning achievement approved
+      const winningApp = studentApps.find(
+        (a) => a.prizeWon && (a.status === 'COMPLETED' || a.status === 'CERTIFICATE_SUBMITTED') && !seen.has(`win_${a.id}`)
+      );
+      if (winningApp) {
+        setCelebration({
+          id: `win_${winningApp.id}`,
+          title: `Congratulations on Winning ${winningApp.prizeCategory || 'Top Honors'}!`,
+          message: `Your participation and winner certificate for "${winningApp.eventName}" (${winningApp.institutionName}) have been verified and approved by the department. Outstanding achievement!`,
+          approvedByName: winningApp.completedByName || winningApp.preApprovedByName || 'Faculty Coordinator',
+          isWinner: true,
+          actionText: 'View My Applications',
+          onAction: () => setCurrentTab('applications'),
+        });
+        return;
+      }
+
+      // Check 2: Pre-approval milestone (50%)
+      const preApprovedApp = studentApps.find(
+        (a) => a.status === 'PRE_APPROVED' && !seen.has(`pre_${a.id}`)
+      );
+      if (preApprovedApp) {
+        setCelebration({
+          id: `pre_${preApprovedApp.id}`,
+          title: 'Pre-Approval Granted (50% Milestone)!',
+          message: `Your application for "${preApprovedApp.eventName}" has been pre-approved! You are officially authorized to participate.`,
+          approvedByName: preApprovedApp.preApprovedByName || 'Faculty Coordinator',
+          isWinner: false,
+          actionText: 'View Applications',
+          onAction: () => setCurrentTab('applications'),
+        });
+        return;
+      }
+    }
+
+    // Check notifications for generic success
+    const success = getUserNotifications(currentUser.uid).find(
+      (notification) => !notification.isRead && notification.type === 'SUCCESS' && !seen.has(notification.id)
+    );
+    if (success) {
+      setCelebration({
+        id: success.id,
+        title: success.title,
+        message: success.message,
+      });
+    }
+  }, [currentUser?.uid, currentUser?.registrationNumber, currentUser?.role]);
+
+  useEffect(() => {
+    const showFirstLoginCelebration = () => {
+      const raw = localStorage.getItem('signovanta_first_login_celebration');
+      if (!raw) return;
+      const content = JSON.parse(raw) as { title: string; message: string };
+      setCelebration({
+        id: 'first-login',
+        title: content.title || 'Account Activated Successfully!',
+        message: content.message || 'Congratulations! Your official III Year ECE profile is verified. You can now submit your first event application from your dashboard.',
+        actionText: 'Submit My First Event',
+        onAction: () => setCurrentTab('new_event'),
+      });
+      localStorage.removeItem('signovanta_first_login_celebration');
+    };
+    window.addEventListener('signovanta:celebration-ready', showFirstLoginCelebration);
+    return () => window.removeEventListener('signovanta:celebration-ready', showFirstLoginCelebration);
+  }, []);
 
   if (isLoading) {
     return (
@@ -37,8 +143,19 @@ const MainAppLayout: React.FC = () => {
     );
   }
 
-  // Not logged in: Show Login / Staff Registration
+  // Not logged in: Show Landing Page / Login / Staff Registration
   if (!currentUser) {
+    if (authView === 'landing') {
+      return (
+        <LandingPage
+          onGoToLogin={() => setAuthView('login')}
+          onOpenRegister={() => {
+            setInitialRegister(true);
+            setAuthView('login');
+          }}
+        />
+      );
+    }
     if (authView === 'staff_register') {
       return (
         <>
@@ -53,8 +170,9 @@ const MainAppLayout: React.FC = () => {
     return (
       <>
         <LoginPage
-          onOpenFirebaseGuide={() => setShowFirebaseGuide(true)}
           onNavigateToStaffRegister={() => setAuthView('staff_register')}
+          onBackToLanding={() => setAuthView('landing')}
+          initialOpenRegister={initialRegister}
         />
         <FirebaseSetupGuideModal
           isOpen={showFirebaseGuide}
@@ -65,21 +183,36 @@ const MainAppLayout: React.FC = () => {
   }
 
   const role = currentUser.role;
+  const validTabs = role === 'MASTER_ADMIN'
+    ? ['overview', 'students', 'staff', 'analytics', 'approvals', 'submissions', 'categories', 'exports', 'issues', 'settings', 'delete_things']
+    : ['STAFF', 'HOD', 'AHOD'].includes(role)
+    ? ['approvals', 'submissions', 'certificates', 'announcements', 'exports', 'analytics', 'issues', 'settings', 'delete_things']
+    : ['dashboard', 'new_event', 'my_profile', 'applications', 'history', 'issues', 'settings'];
+  const selectedTab = validTabs.includes(currentTab)
+    ? currentTab
+    : defaultTabForUser;
 
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col font-sans select-none">
       {/* Top Navbar */}
       <TopNavbar
-        onOpenFirebaseGuide={() => setShowFirebaseGuide(true)}
+        portalTitle={
+          role === 'MASTER_ADMIN'
+            ? 'Master Console'
+            : role === 'STUDENT'
+            ? 'Student Dashboard'
+            : 'Staff Dashboard'
+        }
+        onOpenFirebaseGuide={role === 'MASTER_ADMIN' ? () => setShowFirebaseGuide(true) : undefined}
         onOpenNotifications={() => setShowNotifications(true)}
         onToggleMobileSidebar={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
         isMobileSidebarOpen={isMobileSidebarOpen}
       />
 
-      <div className="flex-1 flex max-w-7xl w-full mx-auto">
+      <div className="flex-1 flex w-full">
         {/* Responsive Sidebar */}
         <Sidebar
-          currentTab={currentTab}
+          currentTab={selectedTab}
           onSelectTab={(tab) => {
             setCurrentTab(tab);
             setIsMobileSidebarOpen(false);
@@ -89,51 +222,47 @@ const MainAppLayout: React.FC = () => {
         />
 
         {/* Main Content Area */}
-        <main className="flex-1 md:ml-64 p-4 sm:p-6 lg:p-8 overflow-y-auto">
+        <main className="flex-1 md:ml-64 min-w-0 p-4 sm:p-6 lg:p-8 overflow-y-auto">
+          {currentTab === 'issues' && <SupportIssuesView />}
           {/* STUDENT DASHBOARD VIEWS */}
-          {role === 'STUDENT' && (
+          {role === 'STUDENT' && selectedTab !== 'issues' && (
             <>
-              {currentTab === 'dashboard' && (
+              {selectedTab === 'dashboard' && (
                 <StudentDashboard
                   onNewEvent={() => setCurrentTab('new_event')}
                   onViewApplications={() => setCurrentTab('applications')}
-                  onSelectApplication={(app) => setCurrentTab('applications')}
+                  onSelectApplication={() => setCurrentTab('applications')}
                   onOpenTeamFormation={() => setCurrentTab('teams')}
                 />
               )}
-              {currentTab === 'new_event' && (
+              {selectedTab === 'new_event' && (
                 <NewEventForm
                   onBack={() => setCurrentTab('dashboard')}
                   onSuccess={(app) => setCurrentTab('applications')}
                 />
               )}
-              {currentTab === 'my_profile' && <StudentProfileView />}
-              {(currentTab === 'applications' ||
-                currentTab === 'certificates' ||
-                currentTab === 'history') && (
+              {selectedTab === 'my_profile' && <StudentProfileView />}
+              {(selectedTab === 'applications' || selectedTab === 'history') && (
                 <StudentApplicationsView onNewEvent={() => setCurrentTab('new_event')} />
               )}
-              {currentTab === 'teams' && <TeamFormationView />}
-              {currentTab === 'settings' && (
+              {selectedTab === 'settings' && (
                 <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-4 max-w-md">
                   <h2 className="text-base font-bold text-slate-900">Portal Settings</h2>
-                  <p className="text-xs text-slate-500">Manage connection and application settings</p>
-                  <button
-                    onClick={() => setShowFirebaseGuide(true)}
-                    className="w-full py-2.5 px-4 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold cursor-pointer"
-                  >
-                    Open Firebase & Cloud Setup Guide
-                  </button>
+                  <p className="text-xs text-slate-500">Manage your profile and application preferences.</p>
                 </div>
               )}
             </>
           )}
 
           {/* STAFF / HOD / AHOD DASHBOARD */}
-          {['STAFF', 'HOD', 'AHOD'].includes(role) && <StaffDashboard />}
+          {['STAFF', 'HOD', 'AHOD'].includes(role) && selectedTab !== 'issues' && (
+            <StaffDashboard activeTab={selectedTab} />
+          )}
 
           {/* MASTER ADMIN DASHBOARD */}
-          {role === 'MASTER_ADMIN' && <AdminDashboard />}
+          {role === 'MASTER_ADMIN' && selectedTab !== 'issues' && (
+            <AdminDashboard activeTab={selectedTab} />
+          )}
         </main>
       </div>
 
@@ -149,9 +278,21 @@ const MainAppLayout: React.FC = () => {
         onNavigate={(url) => {
           setShowNotifications(false);
           if (url.includes('applications')) setCurrentTab('applications');
-          if (url.includes('team')) setCurrentTab('teams');
         }}
       />
+      {celebration && (
+        <CelebrationModal
+          title={celebration.title}
+          message={celebration.message}
+          onClose={() => {
+            markNotificationAsRead(celebration.id);
+            const seenKey = 'signovanta_celebrations_seen';
+            const seen = JSON.parse(localStorage.getItem(seenKey) || '[]') as string[];
+            localStorage.setItem(seenKey, JSON.stringify([...seen, celebration.id]));
+            setCelebration(null);
+          }}
+        />
+      )}
     </div>
   );
 };
@@ -167,4 +308,3 @@ export function App() {
 }
 
 export default App;
-

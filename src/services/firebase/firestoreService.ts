@@ -10,6 +10,8 @@ import {
   UserRole,
 } from '../../types';
 import { INITIAL_CATEGORIES, INITIAL_SECTIONS } from '../../data/seedStudents';
+import { db, isFirebaseConfigured } from './firebaseConfig';
+import { collection, doc, getDocs, setDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
 
 const APPLICATIONS_KEY = 'signovanta_applications_cache';
 const TEAMS_KEY = 'signovanta_teams_cache';
@@ -18,9 +20,16 @@ const NOTIFICATIONS_KEY = 'signovanta_notifications_cache';
 const CATEGORIES_KEY = 'signovanta_categories_cache';
 const SECTIONS_KEY = 'signovanta_sections_cache';
 
+function mirrorToFirebase(collectionName: string, id: string, data: object): void {
+  if (!isFirebaseConfigured() || !db) return;
+  void setDoc(doc(db, collectionName, id), { ...data, updatedAt: serverTimestamp() }, { merge: true })
+    .catch(error => console.error(`[SIGNOVANTA] Failed to save ${collectionName}/${id} in Firebase`, error));
+}
+
 // Helper to seed initial applications for demonstration (strictly ECE students only)
 function getInitialApplications(): EventApplication[] {
-  return [
+  return [];
+  /*
     {
       id: 'app-2026-001',
       applicationNumber: 'SIG-2026-0001',
@@ -94,6 +103,7 @@ function getInitialApplications(): EventApplication[] {
       updatedAt: '2026-10-20T11:45:00Z',
     },
   ];
+  */
 }
 
 // ------------------------------------------------------------------------------
@@ -104,11 +114,12 @@ export function getAllApplications(): EventApplication[] {
     const raw = localStorage.getItem(APPLICATIONS_KEY);
     if (raw) {
       const parsed: EventApplication[] = JSON.parse(raw);
-      // Auto-flush non-ECE legacy demo applications
-      const hasNonEce = parsed.some(a => a.department !== 'Electronics & Communication Engineering');
-      if (!hasNonEce && parsed.length > 0) {
-        return parsed;
+      const demoApplicationIds = new Set(['app-2026-001', 'app-2026-002']);
+      const realApplications = parsed.filter(a => !demoApplicationIds.has(a.id));
+      if (realApplications.length !== parsed.length) {
+        localStorage.setItem(APPLICATIONS_KEY, JSON.stringify(realApplications));
       }
+      return realApplications;
     }
   } catch (e) {
     console.warn('Error reading applications:', e);
@@ -120,12 +131,42 @@ export function getAllApplications(): EventApplication[] {
 
 export function saveAllApplications(apps: EventApplication[]): void {
   localStorage.setItem(APPLICATIONS_KEY, JSON.stringify(apps));
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('signovanta:data-updated'));
+  }
+}
+
+export async function deleteApplication(applicationId: string): Promise<void> {
+  const remaining = getAllApplications().filter(application => application.id !== applicationId);
+  saveAllApplications(remaining);
+  if (isFirebaseConfigured() && db) {
+    try {
+      await deleteDoc(doc(db, 'eventApplications', applicationId));
+    } catch (error) {
+      console.error('[SIGNOVANTA] Failed to delete event application from Firebase', error);
+      throw new Error('The submission could not be deleted from Firebase.');
+    }
+  }
 }
 
 export function getApplicationsForStudent(studentRegNo: string): EventApplication[] {
   const norm = studentRegNo.toUpperCase().trim();
   const all = getAllApplications();
   return all.filter(a => a.studentRegNo.toUpperCase().trim() === norm);
+}
+
+export async function syncApplicationsFromFirebase(): Promise<EventApplication[]> {
+  if (!isFirebaseConfigured() || !db) return getAllApplications();
+  try {
+    const snapshot = await getDocs(collection(db, 'eventApplications'));
+    if (snapshot.empty) return getAllApplications();
+    const remote = snapshot.docs.map(item => ({ id: item.id, ...item.data() })) as EventApplication[];
+    saveAllApplications(remote);
+    return remote;
+  } catch (error) {
+    console.error('[SIGNOVANTA] Failed to load event applications from Firebase', error);
+    return getAllApplications();
+  }
 }
 
 export function getApplicationById(id: string): EventApplication | null {
@@ -154,6 +195,7 @@ export function createApplication(
 
   all.unshift(newApp);
   saveAllApplications(all);
+  mirrorToFirebase('eventApplications', newApp.id, newApp);
 
   // Create audit log
   createApprovalLog({
@@ -185,6 +227,69 @@ export function updateApplication(
 
   all[idx] = updated;
   saveAllApplications(all);
+  mirrorToFirebase('eventApplications', updated.id, updated);
+  return updated;
+}
+
+export function editCompletedApplication(
+  applicationId: string,
+  updates: Pick<EventApplication, 'studentName' | 'eventName' | 'eventCategory' | 'organizerName' | 'institutionName' | 'eventLocation' | 'startDate' | 'endDate' | 'eventMode' | 'eventWebsite' | 'registrationLink' | 'eventDescription' | 'parentGuardianName' | 'parentGuardianMobile' | 'guideName' | 'participationType' | 'teamName' | 'teamSize' | 'teamMembers' | 'facultyCoordinator'>,
+  editorUid: string,
+  editorName: string,
+  editorRole: UserRole
+): EventApplication {
+  const app = getApplicationById(applicationId);
+  if (!app) throw new Error('Application not found');
+  if (app.status !== 'COMPLETED') {
+    throw new Error('This application can only be edited after 100% approval.');
+  }
+
+  const updated = updateApplication(applicationId, updates);
+  createApprovalLog({
+    applicationId: app.id,
+    applicationNumber: app.applicationNumber,
+    action: 'EDITED',
+    performedByUid: editorUid,
+    performedByName: editorName,
+    performedByRole: editorRole,
+    remarks: `Completed event details edited by ${editorRole === 'STUDENT' ? 'the student' : editorName}. Register number remains fixed.`,
+  });
+  return updated;
+}
+
+export function enableStudentApplicationEditing(
+  applicationId: string,
+  editorUid: string,
+  editorName: string,
+  editorRole: UserRole
+): EventApplication {
+  const app = getApplicationById(applicationId);
+  if (!app) throw new Error('Application not found');
+  if (app.status !== 'COMPLETED') {
+    throw new Error('Student editing can only be enabled after 100% approval.');
+  }
+
+  const updated = updateApplication(applicationId, {
+    studentEditEnabledAt: new Date().toISOString(),
+    studentEditEnabledBy: editorUid,
+    studentEditEnabledByName: editorName,
+  });
+  createApprovalLog({
+    applicationId: app.id,
+    applicationNumber: app.applicationNumber,
+    action: 'STUDENT_EDIT_ENABLED',
+    performedByUid: editorUid,
+    performedByName: editorName,
+    performedByRole: editorRole,
+    remarks: 'Student editing enabled for this completed event application.',
+  });
+  createNotification({
+    userId: app.studentId,
+    title: 'Student Editing Enabled',
+    message: `Editing has been enabled for your completed event application "${app.eventName}".`,
+    type: 'INFO',
+    linkUrl: '/student/applications',
+  });
   return updated;
 }
 
@@ -322,6 +427,7 @@ export function submitPostEventDocuments(
     actualAttendanceMarked: boolean;
     prizeWon: boolean;
     prizeCategory?: string;
+    prizeName?: string;
     achievementDescription?: string;
     participationCertUrl?: string;
     winnerCertUrl?: string;
@@ -338,8 +444,12 @@ export function submitPostEventDocuments(
     throw new Error('Participation Certificate is required to confirm event attendance.');
   }
 
+  const cleanData = Object.fromEntries(
+    Object.entries(data).filter(([, value]) => value !== undefined)
+  ) as Partial<EventApplication>;
+
   const updated = updateApplication(applicationId, {
-    ...data,
+    ...cleanData,
     status: 'CERTIFICATE_SUBMITTED',
     postEventSubmittedAt: new Date().toISOString(),
   });
@@ -371,6 +481,9 @@ export function completeEventApplication(
 ): EventApplication {
   const app = getApplicationById(applicationId);
   if (!app) throw new Error('Application not found');
+  if (!app.participationCertUrl || (app.prizeWon && !app.winnerCertUrl)) {
+    throw new Error('Required certificates must be submitted before final verification.');
+  }
 
   const updated = updateApplication(applicationId, {
     status: 'COMPLETED',
@@ -405,6 +518,9 @@ export function completeEventApplication(
 // Team Management Service
 // ------------------------------------------------------------------------------
 export function getAllTeams(): Team[] {
+  localStorage.setItem(TEAMS_KEY, JSON.stringify([]));
+  return [];
+  /*
   try {
     const raw = localStorage.getItem(TEAMS_KEY);
     if (raw) {
@@ -456,6 +572,7 @@ export function getAllTeams(): Team[] {
   };
   localStorage.setItem(TEAMS_KEY, JSON.stringify([defaultTeam]));
   return [defaultTeam];
+  */
 }
 
 export function saveAllTeams(teams: Team[]): void {
@@ -546,6 +663,7 @@ export function createApprovalLog(logData: Omit<ApprovalLog, 'id' | 'timestamp'>
   };
   logs.unshift(newLog);
   localStorage.setItem(APPROVALS_KEY, JSON.stringify(logs));
+  mirrorToFirebase('approvals', newLog.id, newLog);
   return newLog;
 }
 
@@ -574,11 +692,33 @@ export function createNotification(data: Omit<AppNotification, 'id' | 'createdAt
     };
     all.unshift(notif);
     localStorage.setItem(NOTIFICATIONS_KEY, JSON.stringify(all));
+    mirrorToFirebase('notifications', notif.id, notif);
     return notif;
   } catch (e) {
     console.warn('Failed to save notification:', e);
     return {} as AppNotification;
   }
+}
+
+export function createStaffAnnouncement(
+  title: string,
+  message: string,
+  authorName: string,
+  linkUrl = '/student/dashboard'
+): AppNotification {
+  const cleanTitle = title.trim();
+  const cleanMessage = message.trim();
+  if (!cleanTitle || !cleanMessage) {
+    throw new Error('Announcement title and message are required.');
+  }
+
+  return createNotification({
+    userId: 'ALL',
+    title: cleanTitle,
+    message: `${cleanMessage} — Posted by ${authorName}`,
+    type: 'INFO',
+    linkUrl,
+  });
 }
 
 export function markNotificationAsRead(id: string): void {
@@ -624,4 +764,3 @@ export function getAcademicSections(): AcademicSection[] {
 export function saveAcademicSections(sections: AcademicSection[]): void {
   localStorage.setItem(SECTIONS_KEY, JSON.stringify(sections));
 }
-

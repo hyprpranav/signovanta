@@ -41,7 +41,7 @@ export function normalizeRegNo(regNo: string): string {
 }
 
 export function regNoToEmail(regNo: string): string {
-  return `${normalizeRegNo(regNo).toLowerCase()}@signovanta.edu`;
+  return `${normalizeRegNo(regNo).toLowerCase()}@mkce.ac.in`;
 }
 
 // Local Storage Cache Helpers
@@ -54,7 +54,11 @@ export function getLocalStudents(): Student[] {
       const hasInvalidDept = parsed.some(s => s.department !== 'Electronics & Communication Engineering');
       const hasOldSection = parsed.some(s => s.section.includes('V Section'));
       if (parsed.length >= 250 && !hasInvalidDept && !hasOldSection) {
-        return parsed;
+        const migrated = parsed.map(student => ({ ...student, email: regNoToEmail(student.registrationNumber) }));
+        if (migrated.some((student, index) => student.email !== parsed[index].email)) {
+          localStorage.setItem(LOCAL_STUDENTS_KEY, JSON.stringify(migrated));
+        }
+        return migrated;
       }
     }
   } catch (e) {
@@ -69,62 +73,59 @@ export function saveLocalStudents(students: Student[]): void {
   localStorage.setItem(LOCAL_STUDENTS_KEY, JSON.stringify(students));
 }
 
-// Authentic ECE Staff Members only (No fake civil/cse data)
-const DEFAULT_ECE_STAFF: Staff[] = [
-  {
-    id: 'staff-hod-ece',
-    staffId: 'ECE-HOD-01',
-    fullName: 'Dr. M. Sangeetha',
-    email: 'sangeetha.ece@college.edu',
-    mobile: '9840112233',
-    department: 'Electronics & Communication Engineering',
-    designation: 'Professor & Head',
-    requestedRole: 'HOD',
-    assignedRole: 'HOD',
-    approvalStatus: 'APPROVED',
-    isSuspended: false,
-    createdAt: '2026-10-01T08:00:00Z',
-  },
-  {
-    id: 'staff-ahod-ece',
-    staffId: 'ECE-AHOD-02',
-    fullName: 'Dr. Priya Sundaram',
-    email: 'priya.ece@college.edu',
-    mobile: '9443556677',
-    department: 'Electronics & Communication Engineering',
-    designation: 'Associate Professor & AHOD',
-    requestedRole: 'AHOD',
-    assignedRole: 'AHOD',
-    approvalStatus: 'APPROVED',
-    isSuspended: false,
-    createdAt: '2026-10-05T08:00:00Z',
-  },
-  {
-    id: 'staff-fac-ece',
-    staffId: 'ECE-STAFF-03',
-    fullName: 'Prof. R. Venkatesh',
-    email: 'venkatesh.ece@college.edu',
-    mobile: '9842551122',
-    department: 'Electronics & Communication Engineering',
-    designation: 'Assistant Professor',
-    requestedRole: 'STAFF',
-    assignedRole: 'STAFF',
-    approvalStatus: 'APPROVED',
-    isSuspended: false,
-    createdAt: '2026-10-10T08:00:00Z',
-  },
-];
+export async function updateStudentProfile(
+  studentId: string,
+  updates: Pick<Student, 'fullName' | 'mobile' | 'dateOfBirth' | 'profilePhotoUrl' | 'profilePhotoPublicId'>
+): Promise<Student> {
+  const students = getLocalStudents();
+  const index = students.findIndex(student => student.id === studentId);
+  if (index === -1) throw new Error('Student record not found.');
+
+  if (isFirebaseConfigured() && db) {
+    try {
+      await updateDoc(doc(db, 'students', studentId), {
+        ...updates,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.error('[AuthService] Failed to update student profile in Firebase', error);
+      throw new Error('Student profile could not be saved to Firebase.');
+    }
+  }
+
+  const updatedStudent = { ...students[index], ...updates };
+  students[index] = updatedStudent;
+  saveLocalStudents(students);
+  return updatedStudent;
+}
+
+export async function syncStudentsFromFirebase(): Promise<Student[]> {
+  if (!isFirebaseConfigured() || !db) return getLocalStudents();
+  try {
+    const snapshot = await getDocs(collection(db, 'students'));
+    if (snapshot.empty) return getLocalStudents();
+    const students = snapshot.docs.map(item => ({ id: item.id, ...item.data() })) as Student[];
+    saveLocalStudents(students);
+    return students;
+  } catch (error) {
+    console.error('[SIGNOVANTA] Failed to load students from Firebase', error);
+    return getLocalStudents();
+  }
+}
+
+const DEFAULT_ECE_STAFF: Staff[] = [];
 
 export function getLocalStaff(): Staff[] {
   try {
     const raw = localStorage.getItem(LOCAL_STAFF_KEY);
     if (raw) {
       const parsed: Staff[] = JSON.parse(raw);
-      // Ensure only ECE staff are present
-      const hasNonEce = parsed.some(s => s.department !== 'Electronics & Communication Engineering');
-      if (!hasNonEce && parsed.length > 0) {
-        return parsed;
+      const demoStaffIds = new Set(['staff-hod-ece', 'staff-ahod-ece', 'staff-fac-ece']);
+      const realStaff = parsed.filter(s => !demoStaffIds.has(s.id));
+      if (realStaff.length !== parsed.length) {
+        localStorage.setItem(LOCAL_STAFF_KEY, JSON.stringify(realStaff));
       }
+      return realStaff;
     }
   } catch (e) {
     console.warn('Error reading staff cache:', e);
@@ -135,6 +136,23 @@ export function getLocalStaff(): Staff[] {
 
 export function saveLocalStaff(staffList: Staff[]): void {
   localStorage.setItem(LOCAL_STAFF_KEY, JSON.stringify(staffList));
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('signovanta:data-updated'));
+  }
+}
+
+export async function syncStaffFromFirebase(): Promise<Staff[]> {
+  if (!isFirebaseConfigured() || !db) return getLocalStaff();
+  try {
+    const snapshot = await getDocs(collection(db, 'staff'));
+    if (snapshot.empty) return getLocalStaff();
+    const staffList = snapshot.docs.map(item => ({ id: item.id, ...item.data() })) as Staff[];
+    saveLocalStaff(staffList);
+    return staffList;
+  } catch (error) {
+    console.error('[SIGNOVANTA] Failed to load staff from Firebase', error);
+    return getLocalStaff();
+  }
 }
 
 // ------------------------------------------------------------------------------
@@ -152,6 +170,9 @@ export function getStudentRegistrationRequests(): StudentRegistrationRequest[] {
 
 export function saveStudentRegistrationRequests(requests: StudentRegistrationRequest[]): void {
   localStorage.setItem(LOCAL_STUDENT_REQUESTS_KEY, JSON.stringify(requests));
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('signovanta:data-updated'));
+  }
 }
 
 export async function submitStudentRegistrationRequest(data: {
@@ -178,7 +199,7 @@ export async function submitStudentRegistrationRequest(data: {
     id: `std_req_${Date.now()}`,
     registrationNumber: normReg,
     fullName: data.fullName.trim(),
-    email: data.email.trim() || `${normReg.toLowerCase()}@college.edu`,
+    email: regNoToEmail(normReg),
     mobile: data.mobile.trim(),
     department: 'Electronics & Communication Engineering',
     academicYear: 'III Year',
@@ -271,6 +292,28 @@ export async function studentLogin(registrationNumber: string, passwordInput: st
             throw new Error('Initial password must match your Registration Number exactly.');
           }
 
+          const firstLoginAt = new Date().toISOString();
+          try {
+            await updateDoc(doc(db, 'students', student.id), {
+              isActivated: true,
+              status: 'ACTIVE',
+              lastLoginAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            });
+          } catch (activationError) {
+            console.warn('[AuthService] Could not persist first-login activation to Firebase:', activationError);
+          }
+          student.isActivated = true;
+          student.status = 'ACTIVE';
+          student.lastLoginAt = firstLoginAt;
+          const cachedStudents = getLocalStudents();
+          const cachedIndex = cachedStudents.findIndex(item => normalizeRegNo(item.registrationNumber) === normReg);
+          if (cachedIndex !== -1) {
+            cachedStudents[cachedIndex] = { ...cachedStudents[cachedIndex], ...student };
+            saveLocalStudents(cachedStudents);
+          }
+          window.dispatchEvent(new CustomEvent('signovanta:student-updated', { detail: { registrationNumber: normReg } }));
+
           const userProfile: UserProfile = {
             uid: student.uid || `uid_${normReg}`,
             email: student.email || email,
@@ -281,10 +324,11 @@ export async function studentLogin(registrationNumber: string, passwordInput: st
             department: student.department,
             academicYear: student.academicYear,
             section: student.section,
-            status: 'NOT_ACTIVATED',
+            status: 'ACTIVE',
             isFirstLogin: true,
             hasSetPassword: false,
             createdAt: student.createdAt,
+            lastLoginAt: firstLoginAt,
           };
 
           return { user: userProfile, student, requiresPasswordChange: true };
@@ -292,6 +336,15 @@ export async function studentLogin(registrationNumber: string, passwordInput: st
           // Attempt Firebase Auth sign-in
           try {
             const cred = await signInWithEmailAndPassword(auth, email, passwordInput);
+            await updateDoc(doc(db, 'students', student.id), {
+              isActivated: true,
+              status: 'ACTIVE',
+              lastLoginAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            });
+            student.isActivated = true;
+            student.status = 'ACTIVE';
+            student.lastLoginAt = new Date().toISOString();
             const userProfile: UserProfile = {
               uid: cred.user.uid,
               email: cred.user.email || email,
@@ -303,7 +356,7 @@ export async function studentLogin(registrationNumber: string, passwordInput: st
               academicYear: student.academicYear,
               section: student.section,
               profilePhotoUrl: student.profilePhotoUrl,
-              status: student.status,
+              status: 'ACTIVE',
               isFirstLogin: false,
               hasSetPassword: true,
               createdAt: student.createdAt,
@@ -338,6 +391,13 @@ export async function studentLogin(registrationNumber: string, passwordInput: st
       throw new Error('First-time login: Your initial password is your Registration Number.');
     }
 
+    const firstLoginAt = new Date().toISOString();
+    student.isActivated = true;
+    student.status = 'ACTIVE';
+    student.lastLoginAt = firstLoginAt;
+    saveLocalStudents(students);
+    window.dispatchEvent(new CustomEvent('signovanta:student-updated', { detail: { registrationNumber: normReg } }));
+
     const userProfile: UserProfile = {
       uid: student.uid || `uid_${normReg}`,
       email: student.email,
@@ -348,10 +408,11 @@ export async function studentLogin(registrationNumber: string, passwordInput: st
       department: student.department,
       academicYear: student.academicYear,
       section: student.section,
-      status: 'NOT_ACTIVATED',
+      status: 'ACTIVE',
       isFirstLogin: true,
       hasSetPassword: false,
       createdAt: student.createdAt,
+      lastLoginAt: firstLoginAt,
     };
 
     return { user: userProfile, student, requiresPasswordChange: true };
@@ -364,8 +425,11 @@ export async function studentLogin(registrationNumber: string, passwordInput: st
   }
 
   const now = new Date().toISOString();
+  student.isActivated = true;
+  student.status = 'ACTIVE';
   student.lastLoginAt = now;
   saveLocalStudents(students);
+  window.dispatchEvent(new CustomEvent('signovanta:student-updated', { detail: { registrationNumber: normReg } }));
 
   const userProfile: UserProfile = {
     uid: student.uid || `uid_${normReg}`,
@@ -416,7 +480,7 @@ export async function completeFirstLogin(
   // 1. Try Firebase Auth create account / update
   if (isFirebaseConfigured() && auth && db) {
     try {
-      const email = profileUpdates.email || regNoToEmail(normReg);
+      const email = regNoToEmail(normReg);
       let firebaseUid = '';
 
       try {
@@ -703,7 +767,7 @@ export async function universalLogin(identifier: string, passwordInput: string):
       return { user, staff, requiresPasswordChange: false };
     }
 
-    // If it's a student email like 927624bec001@college.edu, parse the regNo prefix
+    // Student official email uses the registration number as its local part.
     const regPrefix = cleanId.split('@')[0];
     if (regPrefix.match(/^\d{6}[a-zA-Z]{3}\d{3}$/i)) {
       const res = await studentLogin(regPrefix, passwordInput);
@@ -729,4 +793,3 @@ export async function signOutUser(): Promise<void> {
   }
   localStorage.removeItem(LOCAL_USER_KEY);
 }
-

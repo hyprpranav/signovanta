@@ -1,36 +1,33 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { usePresence } from '../../context/PresenceContext';
-import { StatusDot } from '../common/StatusDot';
 import { Badge } from '../common/Badge';
 import {
   Bell,
   LogOut,
   Flame,
-  Shield,
   User,
   Menu,
   X,
   ChevronDown,
-  Sparkles,
 } from 'lucide-react';
 import { getUserNotifications } from '../../services/firebase/firestoreService';
 
 interface TopNavbarProps {
-  onOpenFirebaseGuide: () => void;
+  portalTitle: string;
+  onOpenFirebaseGuide?: () => void;
   onOpenNotifications: () => void;
   onToggleMobileSidebar: () => void;
   isMobileSidebarOpen: boolean;
 }
 
 export const TopNavbar: React.FC<TopNavbarProps> = ({
+  portalTitle,
   onOpenFirebaseGuide,
   onOpenNotifications,
   onToggleMobileSidebar,
   isMobileSidebarOpen,
 }) => {
   const { currentUser, studentData, staffData, logout } = useAuth();
-  const { summary } = usePresence();
   const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   const notifications = currentUser ? getUserNotifications(currentUser.uid) : [];
@@ -38,7 +35,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
 
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/80 px-4 sm:px-6 py-2.5">
-      <div className="max-w-7xl mx-auto flex items-center justify-between gap-3">
+      <div className="w-full flex items-center justify-between gap-3">
         {/* Left: Mobile Hamburger & Logo */}
         <div className="flex items-center gap-3">
           <button
@@ -62,8 +59,8 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
                   v2.0
                 </span>
               </div>
-              <p className="hidden md:block text-[11px] text-slate-500 font-medium">
-                Every Event. Every Approval. One Platform.
+              <p className="text-[11px] font-bold text-blue-700 uppercase tracking-wide">
+                {portalTitle}
               </p>
             </div>
           </div>
@@ -71,23 +68,17 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
 
         {/* Right: Actions, Real-time status, Role Display, Profile */}
         <div className="flex items-center gap-2 sm:gap-3">
-          {/* Real-time Presence summary chip (visible on tablet/desktop) */}
-          <div className="hidden lg:flex items-center gap-2 px-3 py-1 bg-slate-100 rounded-full text-xs font-semibold text-slate-700">
-            <StatusDot status="ONLINE" size="sm" />
-            <span>
-              {summary.online} Online / {summary.total} Students
-            </span>
-          </div>
-
           {/* Cloud Setup Wizard Trigger */}
-          <button
-            onClick={onOpenFirebaseGuide}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100/80 text-amber-900 border border-amber-200 rounded-xl text-xs font-bold transition-colors cursor-pointer"
-            title="Firebase & Cloud Services Connection Center"
-          >
-            <Flame size={15} className="text-amber-600" />
-            <span className="hidden sm:inline">Cloud Setup</span>
-          </button>
+          {onOpenFirebaseGuide && (
+            <button
+              onClick={onOpenFirebaseGuide}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100/80 text-amber-900 border border-amber-200 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+              title="Firebase & Cloud Services Connection Center"
+            >
+              <Flame size={15} className="text-amber-600" />
+              <span className="hidden sm:inline">Cloud Setup</span>
+            </button>
+          )}
 
           {/* Notifications Bell */}
           <button
@@ -108,7 +99,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
             <div className="relative">
               <button
                 onClick={() => setIsProfileOpen(!isProfileOpen)}
-                className="flex items-center gap-2 p-1.5 sm:px-3 sm:py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl transition-all cursor-pointer text-left"
+                className="md:hidden flex items-center gap-2 p-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl transition-all cursor-pointer text-left"
               >
                 <div className="w-7 h-7 rounded-lg bg-slate-200 overflow-hidden shrink-0 flex items-center justify-center">
                   {currentUser.profilePhotoUrl ? (
@@ -121,18 +112,17 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
                     <User size={16} className="text-slate-500" />
                   )}
                 </div>
-                <div className="hidden sm:block">
+                <div className="hidden">
                   <div className="flex items-center gap-1.5">
                     <span className="text-xs font-bold text-slate-900 leading-none">
                       {currentUser.displayName}
                     </span>
-                    <StatusDot status="ONLINE" size="sm" />
                   </div>
                   <div className="mt-1">
                     <Badge role={currentUser.role} size="sm" />
                   </div>
                 </div>
-                <ChevronDown size={14} className="text-slate-400 hidden sm:block" />
+                <ChevronDown size={14} className="text-slate-400" />
               </button>
 
               {/* Profile Dropdown */}
@@ -173,4 +163,3 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
     </header>
   );
 };
-

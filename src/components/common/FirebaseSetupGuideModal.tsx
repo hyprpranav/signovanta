@@ -67,6 +67,10 @@ export const FirebaseSetupGuideModal: React.FC<FirebaseSetupGuideModalProps> = (
       alert('Please provide at least the Firebase API Key and Project ID.');
       return;
     }
+    if (!cloudName.trim() || !uploadPreset.trim()) {
+      alert('Please provide the Cloudinary Cloud Name and unsigned Upload Preset. Media uploads will not use local fallback storage.');
+      return;
+    }
     const fbConfig: FirebaseConfigOptions = {
       apiKey: apiKey.trim(),
       authDomain: authDomain.trim() || `${projectId.trim()}.firebaseapp.com`,
@@ -78,13 +82,11 @@ export const FirebaseSetupGuideModal: React.FC<FirebaseSetupGuideModalProps> = (
     };
     saveFirebaseConfig(fbConfig);
 
-    if (cloudName) {
-      const cldConfig: CloudinaryConfig = {
-        cloudName: cloudName.trim(),
-        uploadPreset: uploadPreset.trim() || 'signovanta_uploads',
-      };
-      saveCloudinaryConfig(cldConfig);
-    }
+    const cldConfig: CloudinaryConfig = {
+      cloudName: cloudName.trim(),
+      uploadPreset: uploadPreset.trim(),
+    };
+    saveCloudinaryConfig(cldConfig);
 
     setSaveSuccess(true);
     setTimeout(() => {
@@ -294,6 +296,10 @@ export const FirebaseSetupGuideModal: React.FC<FirebaseSetupGuideModalProps> = (
                   />
                 </div>
               </div>
+              <p className="text-[11px] leading-relaxed text-slate-500">
+                In Cloudinary, create an <strong>unsigned</strong> upload preset and copy its exact name here.
+                Uploads are now Cloudinary-only; if this configuration is missing or invalid, the app will show an error instead of storing files locally.
+              </p>
             </div>
 
             {saveSuccess && (
@@ -367,4 +373,3 @@ export const FirebaseSetupGuideModal: React.FC<FirebaseSetupGuideModalProps> = (
     </Modal>
   );
 };
-

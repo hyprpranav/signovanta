@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { AppNotification } from '../../types';
 import {
@@ -19,11 +19,15 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
   onNavigate,
 }) => {
   const { currentUser } = useAuth();
-  if (!isOpen || !currentUser) return null;
-
   const [notifications, setNotifications] = useState<AppNotification[]>(() =>
-    getUserNotifications(currentUser.uid)
+    currentUser ? getUserNotifications(currentUser.uid) : []
   );
+
+  useEffect(() => {
+    setNotifications(currentUser ? getUserNotifications(currentUser.uid) : []);
+  }, [currentUser, isOpen]);
+
+  if (!isOpen || !currentUser) return null;
 
   const handleMarkRead = (id: string) => {
     markNotificationAsRead(id);
@@ -131,4 +135,3 @@ export const NotificationDrawer: React.FC<NotificationDrawerProps> = ({
     </div>
   );
 };
-

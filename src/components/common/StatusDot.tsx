@@ -60,7 +60,11 @@ export const StatusDot: React.FC<StatusDotProps> = ({
 
   return (
     <div className="inline-flex items-center gap-2">
-      <span className="relative flex items-center justify-center">
+      <span
+        className="relative flex items-center justify-center"
+        title={showLabel && status === 'NOT_ACTIVATED' ? config.label : undefined}
+        aria-label={showLabel && status === 'NOT_ACTIVATED' ? config.label : undefined}
+      >
         {config.ping && (
           <span
             className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${config.color}`}
@@ -70,7 +74,7 @@ export const StatusDot: React.FC<StatusDotProps> = ({
           className={`relative inline-flex rounded-full ring-2 ${sizeClasses[size]} ${config.color} ${config.ring}`}
         />
       </span>
-      {showLabel && (
+      {showLabel && status !== 'NOT_ACTIVATED' && (
         <span className={`text-xs font-semibold tracking-wide uppercase ${config.textColor}`}>
           {config.label}
         </span>
@@ -78,4 +82,3 @@ export const StatusDot: React.FC<StatusDotProps> = ({
     </div>
   );
 };
-
