@@ -52,15 +52,17 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       <header className="sticky top-0 z-40 bg-slate-900/90 backdrop-blur-md border-b border-slate-800 px-4 sm:px-6 lg:px-8 py-3">
         <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
           {/* Logo Group */}
-          <div className="flex items-center gap-3 sm:gap-4">
+          <div className="flex items-center gap-2 sm:gap-4">
             {/* Slot 1: College Logo */}
             <div
-              className="flex items-center gap-2 p-1.5 rounded-2xl bg-white/5 border border-white/10 hover:border-blue-500/40 transition-colors"
+              className="flex items-center gap-2 p-1 rounded-2xl bg-white/5 border border-white/10 hover:border-blue-500/40 transition-colors"
               title="M. Kumarasamy College of Engineering, Karur"
             >
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-700 flex items-center justify-center font-black text-white text-xs shadow-md shrink-0">
-                MKCE
-              </div>
+              <img
+                src="/mkce-logo.png"
+                alt="MKCE Logo"
+                className="w-9 h-9 sm:w-10 sm:h-10 object-contain rounded-xl bg-white p-0.5 shadow-sm shrink-0"
+              />
               <div className="hidden lg:block text-left pr-1">
                 <span className="block text-[11px] font-black tracking-tight text-white leading-tight">
                   M. KUMARASAMY
@@ -76,12 +78,14 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
             {/* Slot 2: Department Logo */}
             <div
-              className="flex items-center gap-2 p-1.5 rounded-2xl bg-white/5 border border-white/10 hover:border-purple-500/40 transition-colors"
+              className="flex items-center gap-2 p-1 rounded-2xl bg-white/5 border border-white/10 hover:border-purple-500/40 transition-colors"
               title="Department of Electronics and Communication Engineering"
             >
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center font-black text-white text-xs shadow-md shrink-0">
-                <Cpu size={18} />
-              </div>
+              <img
+                src="/ece-logo.png"
+                alt="ECE Department Logo"
+                className="w-9 h-9 sm:w-10 sm:h-10 object-contain rounded-xl bg-white p-0.5 shadow-sm shrink-0"
+              />
               <div className="hidden xl:block text-left pr-1">
                 <span className="block text-[11px] font-black tracking-tight text-white leading-tight">
                   DEPARTMENT OF ECE
@@ -97,11 +101,13 @@ export const LandingPage: React.FC<LandingPageProps> = ({
 
             {/* Slot 3: Platform Logo (SIGNOVANTA) */}
             <div className="flex items-center gap-2">
-              <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-700 flex items-center justify-center font-black text-white text-lg shadow-md shrink-0">
-                S
-              </div>
+              <img
+                src="/signovanta-logo.png"
+                alt="SIGNOVANTA Logo"
+                className="w-9 h-9 sm:w-10 sm:h-10 object-contain rounded-xl bg-slate-950 p-1 border border-white/10 shadow-sm shrink-0"
+              />
               <div>
-                <span className="font-black text-base tracking-tight text-white block leading-none">
+                <span className="font-black text-sm sm:text-base tracking-tight text-white block leading-none">
                   SIGNOVANTA
                 </span>
                 <span className="text-[10px] text-emerald-400 font-bold tracking-wider">
@@ -200,13 +206,18 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[350px] bg-gradient-to-tr from-blue-600/20 via-purple-600/20 to-pink-600/20 blur-3xl pointer-events-none" />
 
         <div className="max-w-5xl mx-auto text-center space-y-6 relative z-10">
-          {/* Institutional Badge */}
-          <div className="inline-flex flex-wrap items-center justify-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-900 border border-slate-700 text-slate-300 text-xs font-semibold shadow-inner">
-            <span className="flex h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
-            <span className="font-bold text-white">M. Kumarasamy College of Engineering</span>
-            <span className="text-slate-500">•</span>
-            <span className="text-blue-400">Department of ECE</span>
-            <span className="text-slate-500">•</span>
+          {/* Institutional Badge with actual logos */}
+          <div className="inline-flex flex-wrap items-center justify-center gap-2.5 px-4 py-2 rounded-full bg-slate-900 border border-slate-700/80 text-slate-300 text-xs font-semibold shadow-inner">
+            <div className="flex items-center gap-1.5">
+              <img src="/mkce-logo.png" alt="MKCE" className="w-5 h-5 object-contain rounded bg-white p-0.5" />
+              <span className="font-bold text-white">M. Kumarasamy College of Engineering</span>
+            </div>
+            <span className="text-slate-600 hidden sm:inline">•</span>
+            <div className="flex items-center gap-1.5">
+              <img src="/ece-logo.png" alt="ECE" className="w-5 h-5 object-contain rounded bg-white p-0.5" />
+              <span className="text-blue-300 font-bold">Department of ECE</span>
+            </div>
+            <span className="text-slate-600 hidden sm:inline">•</span>
             <span className="text-purple-400 font-bold">III Year Academic Cohort</span>
           </div>
 
@@ -382,17 +393,24 @@ export const LandingPage: React.FC<LandingPageProps> = ({
       {/* 7. FOOTER WITH CREATOR ATTRIBUTION (Boomika) */}
       <footer className="mt-auto bg-slate-950 border-t border-slate-800 py-10 px-4 sm:px-6 lg:px-8 text-xs text-slate-400">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6 text-center md:text-left">
-          <div className="space-y-1.5">
-            <div className="flex items-center justify-center md:justify-start gap-2">
-              <span className="font-black text-white text-sm tracking-tight">M. KUMARASAMY COLLEGE OF ENGINEERING</span>
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/60 text-blue-300 border border-blue-800 font-bold">Autonomous</span>
+          <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4">
+            <div className="flex items-center gap-2 shrink-0">
+              <img src="/mkce-logo.png" alt="MKCE Logo" className="w-10 h-10 object-contain rounded-xl bg-white p-1 shadow-sm" />
+              <img src="/ece-logo.png" alt="ECE Logo" className="w-10 h-10 object-contain rounded-xl bg-white p-1 shadow-sm" />
+              <img src="/signovanta-logo.png" alt="SIGNOVANTA Logo" className="w-10 h-10 object-contain rounded-xl bg-slate-900 border border-slate-700 p-1 shadow-sm" />
             </div>
-            <p className="text-[11px] text-slate-400">
-              Department of Electronics and Communication Engineering (ECE) • Thalavapalayam, Karur - 639 113.
-            </p>
-            <p className="text-[11px] text-slate-500">
-              SIGNOVANTA Platform • Dedicated to 3rd Year ECE Cohort (Sections A, B, C, D)
-            </p>
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-center md:justify-start gap-2 flex-wrap">
+                <span className="font-black text-white text-sm tracking-tight">M. KUMARASAMY COLLEGE OF ENGINEERING</span>
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/60 text-blue-300 border border-blue-800 font-bold">Autonomous</span>
+              </div>
+              <p className="text-[11px] text-slate-400">
+                Department of Electronics and Communication Engineering (ECE) • Thalavapalayam, Karur - 639 113.
+              </p>
+              <p className="text-[11px] text-slate-500">
+                SIGNOVANTA Platform • Dedicated to 3rd Year ECE Cohort (Sections A, B, C, D)
+              </p>
+            </div>
           </div>
 
           {/* Prominent Creator Attribution */}

@@ -232,3 +232,4 @@ export const StudentSettingsView: React.FC = () => {
     </div>
   );
 };
+

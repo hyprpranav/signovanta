@@ -134,13 +134,26 @@ const MainAppLayout: React.FC = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center text-white space-y-4">
-        <div className="w-12 h-12 rounded-2xl bg-blue-600 flex items-center justify-center font-black text-2xl animate-bounce">
-          S
+      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-white space-y-4">
+        <div className="relative">
+          <img
+            src="/signovanta-logo.png"
+            alt="SIGNOVANTA"
+            className="w-16 h-16 rounded-2xl object-contain bg-slate-900 p-2 border border-slate-700 shadow-2xl animate-pulse"
+          />
+          <div className="absolute -bottom-1 -right-1 flex gap-1">
+            <img src="/mkce-logo.png" alt="MKCE" className="w-5 h-5 rounded-md bg-white p-0.5 shadow-xs" />
+            <img src="/ece-logo.png" alt="ECE" className="w-5 h-5 rounded-md bg-white p-0.5 shadow-xs" />
+          </div>
         </div>
-        <p className="text-xs font-bold uppercase tracking-wider text-slate-400">
-          Loading SIGNOVANTA Portal...
-        </p>
+        <div className="text-center space-y-1">
+          <p className="text-sm font-extrabold tracking-wide text-white">
+            SIGNOVANTA <span className="text-xs text-blue-400">v2.0</span>
+          </p>
+          <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            ECE Department • M. Kumarasamy College of Engineering
+          </p>
+        </div>
       </div>
     );
   }

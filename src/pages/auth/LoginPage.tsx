@@ -164,37 +164,82 @@ export const LoginPage: React.FC<LoginPageProps> = ({
     <div className="min-h-screen bg-slate-900 flex flex-col justify-between p-4 sm:p-6 text-slate-100">
       {/* Top Bar with Branding & Back to Home */}
       <div className="max-w-6xl w-full mx-auto flex items-center justify-between py-2">
-        <div className="flex items-center gap-2.5">
-          <div className="w-10 h-10 rounded-2xl bg-blue-600 text-white flex items-center justify-center font-black text-xl tracking-tight shadow-md">
-            S
-          </div>
+        <div className="flex items-center gap-3">
+          <img
+            src="/signovanta-logo.png"
+            alt="SIGNOVANTA Logo"
+            className="w-10 h-10 rounded-2xl object-contain bg-slate-950 p-1 border border-slate-700 shadow-md shrink-0"
+          />
           <div>
-            <span className="font-black text-lg tracking-tight text-white block leading-none">
-              SIGNOVANTA
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="font-black text-lg tracking-tight text-white block leading-none">
+                SIGNOVANTA
+              </span>
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-900/60 text-blue-300 border border-blue-800">
+                v2.0
+              </span>
+            </div>
             <span className="text-[11px] text-blue-300 font-medium">
               Every Event. Every Approval. One Platform.
             </span>
           </div>
         </div>
 
-        {onBackToLanding && (
-          <button
-            type="button"
-            onClick={onBackToLanding}
-            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
-          >
-            <span>← Back to Home</span>
-          </button>
-        )}
+        <div className="flex items-center gap-2 sm:gap-3">
+          {/* Institutional Branding on large screens */}
+          <div className="hidden sm:flex items-center gap-2 bg-slate-800/60 border border-slate-700/60 px-2.5 py-1 rounded-2xl">
+            <img
+              src="/mkce-logo.png"
+              alt="MKCE"
+              title="M. Kumarasamy College of Engineering (Autonomous)"
+              className="w-7 h-7 object-contain rounded-lg bg-white p-0.5 shadow-2xs"
+            />
+            <img
+              src="/ece-logo.png"
+              alt="ECE"
+              title="Department of Electronics and Communication Engineering"
+              className="w-7 h-7 object-contain rounded-lg bg-white p-0.5 shadow-2xs"
+            />
+          </div>
+
+          {onBackToLanding && (
+            <button
+              type="button"
+              onClick={onBackToLanding}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
+            >
+              <span>← Back to Home</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* SINGLE UNIFIED LOGIN CARD */}
       <div className="max-w-md w-full mx-auto my-auto py-6">
         <div className="bg-white text-slate-900 rounded-3xl shadow-2xl border border-slate-200/80 p-6 sm:p-8 space-y-6">
-          {/* Header */}
-          <div className="text-center space-y-1">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full inline-block mb-1">
+          {/* Header with College, Department and Platform Logos */}
+          <div className="text-center space-y-2">
+            <div className="flex items-center justify-center gap-2.5 pb-1">
+              <img
+                src="/mkce-logo.png"
+                alt="MKCE Logo"
+                title="M. Kumarasamy College of Engineering"
+                className="w-11 h-11 object-contain rounded-xl bg-white p-1 border border-slate-200 shadow-2xs"
+              />
+              <img
+                src="/signovanta-logo.png"
+                alt="SIGNOVANTA Logo"
+                title="SIGNOVANTA Platform"
+                className="w-12 h-12 object-contain rounded-2xl bg-slate-950 p-1.5 border border-slate-300 shadow-sm"
+              />
+              <img
+                src="/ece-logo.png"
+                alt="ECE Logo"
+                title="ECE Department"
+                className="w-11 h-11 object-contain rounded-xl bg-white p-1 border border-slate-200 shadow-2xs"
+              />
+            </div>
+            <span className="text-[11px] font-bold uppercase tracking-wider text-blue-600 bg-blue-50 px-2.5 py-1 rounded-full inline-block">
               ECE Department Portal • 3rd Year
             </span>
             <h2 className="text-2xl font-black tracking-tight text-slate-900">
@@ -304,7 +349,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({
       </div>
 
       {/* Footer Info */}
-      <div className="text-center text-xs text-slate-500 py-3 space-y-1">
+      <div className="text-center text-xs text-slate-500 py-4 space-y-2">
+        <div className="flex items-center justify-center gap-2">
+          <img src="/mkce-logo.png" alt="MKCE" className="w-5 h-5 rounded-sm bg-white p-0.5 object-contain" />
+          <img src="/ece-logo.png" alt="ECE" className="w-5 h-5 rounded-sm bg-white p-0.5 object-contain" />
+          <img src="/signovanta-logo.png" alt="SIGNOVANTA" className="w-5 h-5 rounded-sm bg-slate-950 p-0.5 object-contain" />
+        </div>
         <p>M. Kumarasamy College of Engineering, Karur • Department of Electronics and Communication Engineering</p>
         <p className="text-slate-400">SIGNOVANTA 3rd Year Event Participation Gateway • Crafted with Pride by <strong className="text-slate-200">Boomika</strong></p>
       </div>

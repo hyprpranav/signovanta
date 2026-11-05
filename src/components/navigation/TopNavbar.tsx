@@ -52,9 +52,11 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
           </button>
 
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl bg-slate-900 text-white flex items-center justify-center font-black text-lg tracking-tight shadow-xs">
-              S
-            </div>
+            <img
+              src="/signovanta-logo.png"
+              alt="SIGNOVANTA Logo"
+              className="w-9 h-9 rounded-xl object-contain bg-slate-950 p-1 border border-slate-200 shadow-xs shrink-0"
+            />
             <div>
               <div className="flex items-center gap-2">
                 <span className="font-extrabold text-base tracking-tight text-slate-900 leading-none">
@@ -67,6 +69,26 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({
               <p className="text-[11px] font-bold text-blue-700 uppercase tracking-wide">
                 {portalTitle}
               </p>
+            </div>
+          </div>
+
+          {/* Institutional Branding Badges (Desktop) */}
+          <div className="hidden lg:flex items-center gap-2 pl-3 ml-1 border-l border-slate-200">
+            <img
+              src="/mkce-logo.png"
+              alt="MKCE Logo"
+              title="M. Kumarasamy College of Engineering (Autonomous)"
+              className="w-8 h-8 object-contain rounded-lg bg-slate-50 p-0.5 border border-slate-200 shadow-2xs"
+            />
+            <img
+              src="/ece-logo.png"
+              alt="ECE Logo"
+              title="Department of Electronics and Communication Engineering"
+              className="w-8 h-8 object-contain rounded-lg bg-slate-50 p-0.5 border border-slate-200 shadow-2xs"
+            />
+            <div className="text-[10px] leading-tight text-slate-500 font-medium">
+              <span className="font-bold text-slate-700 block">MKCE • ECE</span>
+              <span>3rd Year Cohort</span>
             </div>
           </div>
         </div>
