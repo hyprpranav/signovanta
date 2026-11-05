@@ -16,8 +16,6 @@ import {
   Briefcase,
   Phone,
   Building,
-  ShieldCheck,
-  Sparkles,
 } from 'lucide-react';
 
 interface LoginPageProps {
@@ -30,7 +28,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   onBackToLanding,
   initialOpenRegister = false,
 }) => {
-  const { universalLogin, loginAsAdminBoomikaQuick, submitStudentRequest } = useAuth();
+  const { universalLogin, submitStudentRequest } = useAuth();
 
   // Single Unified Login Credentials
   const [identifier, setIdentifier] = useState('');
@@ -60,24 +58,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({
   const [reqStaffPassword, setReqStaffPassword] = useState('');
 
   const [isLoading, setIsLoading] = useState(false);
-  const [isQuickAdminLoading, setIsQuickAdminLoading] = useState(false);
   const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [requestSuccessMessage, setRequestSuccessMessage] = useState<string | null>(null);
   const [requestErrorMessage, setRequestErrorMessage] = useState<string | null>(null);
-
-  // Quick 1-click login as Master Admin (Boomika)
-  const handleQuickAdminLogin = async () => {
-    setErrorMessage(null);
-    setIsQuickAdminLoading(true);
-    try {
-      await loginAsAdminBoomikaQuick();
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Quick admin login failed.');
-    } finally {
-      setIsQuickAdminLoading(false);
-    }
-  };
 
   // Single unified submission handler
   const handleUnifiedSubmit = async (e: React.FormEvent) => {
@@ -250,31 +234,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({
             </p>
           </div>
 
-          {/* 1-Click Master Admin Login Button (Testing Key for Boomika) */}
-          <div className="p-3 bg-gradient-to-r from-purple-50 via-indigo-50 to-blue-50 border border-purple-200/80 rounded-2xl space-y-2">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <ShieldCheck size={16} className="text-purple-600" />
-                <span className="text-xs font-bold text-purple-950">Master Admin Testing Login</span>
-              </div>
-              <span className="text-[10px] font-bold text-purple-700 bg-purple-100/80 px-2 py-0.5 rounded-md">
-                Boomika
-              </span>
-            </div>
-            <Button
-              type="button"
-              variant="primary"
-              size="sm"
-              fullWidth
-              isLoading={isQuickAdminLoading}
-              onClick={handleQuickAdminLogin}
-              className="bg-purple-900 hover:bg-purple-950 text-white font-bold cursor-pointer"
-            >
-              <Sparkles size={14} className="mr-1.5 text-amber-300" />
-              1-Click Master Admin Login (Boomika)
-            </Button>
-          </div>
-
           {/* Error Message */}
           {errorMessage && (
             <div className="p-3.5 bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl text-xs flex items-center gap-2">
@@ -295,7 +254,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                   required
                   value={identifier}
                   onChange={(e) => setIdentifier(e.target.value)}
-                  placeholder="e.g. 927624BEC001 or boomika@gmail.com"
+                  placeholder="e.g. 927624BEC001 or email address"
                   className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-300 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-slate-900 font-medium"
                 />
                 <User size={15} className="absolute left-3 top-3 text-slate-400" />
@@ -356,7 +315,19 @@ export const LoginPage: React.FC<LoginPageProps> = ({
           <img src="/signovanta-logo.png" alt="SIGNOVANTA" className="w-5 h-5 rounded-sm bg-slate-950 p-0.5 object-contain" />
         </div>
         <p>M. Kumarasamy College of Engineering, Karur • Department of Electronics and Communication Engineering</p>
-        <p className="text-slate-400">SIGNOVANTA 3rd Year Event Participation Gateway • Crafted with Pride by <strong className="text-slate-200">Boomika</strong></p>
+        <div className="text-slate-400 flex flex-wrap items-center justify-center gap-2 pt-0.5">
+          <span>SIGNOVANTA Platform • Crafted with Pride by</span>
+          <span className="text-white font-extrabold bg-blue-950/80 text-blue-300 border border-blue-800 px-2.5 py-0.5 rounded-lg text-xs">
+            HARISH PRANAV S
+          </span>
+          <a href="tel:7845693765" className="text-blue-400 hover:text-blue-300 font-bold transition-colors inline-flex items-center gap-1">
+            📞 7845693765
+          </a>
+          <span className="text-slate-600">•</span>
+          <a href="mailto:harishpranavs259@gmail.com" className="text-blue-400 hover:text-blue-300 font-bold transition-colors inline-flex items-center gap-1">
+            ✉️ harishpranavs259@gmail.com
+          </a>
+        </div>
       </div>
 
       {/* Mandatory First-Time Password Reset Modal */}

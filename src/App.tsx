@@ -296,6 +296,31 @@ const MainAppLayout: React.FC = () => {
           {role === 'MASTER_ADMIN' && selectedTab !== 'issues' && (
             <AdminDashboard activeTab={selectedTab} />
           )}
+
+          {/* Universal Dashboard Footer (HARISH PRANAV S) */}
+          <footer className="mt-12 pt-6 pb-2 border-t border-slate-200 text-xs text-slate-500 flex flex-col md:flex-row items-center justify-between gap-4">
+            <div className="flex items-center gap-2 flex-wrap justify-center md:justify-start">
+              <img src="/mkce-logo.png" alt="MKCE" className="w-5 h-5 rounded object-contain bg-white p-0.5 border border-slate-200" />
+              <img src="/ece-logo.png" alt="ECE" className="w-5 h-5 rounded object-contain bg-white p-0.5 border border-slate-200" />
+              <img src="/signovanta-logo.png" alt="SIGNOVANTA" className="w-5 h-5 rounded object-contain bg-slate-900 p-0.5" />
+              <span className="font-bold text-slate-700">SIGNOVANTA v2.0</span>
+              <span className="text-slate-400">•</span>
+              <span className="text-slate-500">ECE Department • M. Kumarasamy College of Engineering</span>
+            </div>
+            <div className="flex flex-wrap items-center justify-center md:justify-end gap-2 text-center md:text-right">
+              <span className="text-[11px] font-medium text-slate-500">Crafted with Pride by</span>
+              <span className="font-extrabold text-blue-700 bg-blue-50 px-2.5 py-0.5 rounded-full border border-blue-200 text-xs">
+                HARISH PRANAV S
+              </span>
+              <a href="tel:7845693765" className="font-bold text-slate-600 hover:text-blue-600 transition-colors inline-flex items-center gap-1">
+                📞 7845693765
+              </a>
+              <span className="text-slate-300">•</span>
+              <a href="mailto:harishpranavs259@gmail.com" className="font-bold text-slate-600 hover:text-blue-600 transition-colors inline-flex items-center gap-1">
+                ✉️ harishpranavs259@gmail.com
+              </a>
+            </div>
+          </footer>
         </main>
       </div>
 

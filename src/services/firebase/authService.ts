@@ -806,7 +806,11 @@ export async function universalLogin(identifier: string, passwordInput: string):
   }
 
   // 1. Check if Master Admin (Boomika)
-  if (lowerId === MASTER_ADMIN_CREDENTIALS.email.toLowerCase() || lowerId === 'masteradmin@signovanta.edu') {
+  if (
+    lowerId === MASTER_ADMIN_CREDENTIALS.email.toLowerCase() ||
+    lowerId === 'boomika' ||
+    lowerId === 'masteradmin@signovanta.edu'
+  ) {
     const adminUser = await masterAdminLogin(passwordInput);
     return { user: adminUser, requiresPasswordChange: false };
   }
