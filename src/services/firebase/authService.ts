@@ -88,8 +88,7 @@ export async function updateStudentProfile(
         updatedAt: serverTimestamp(),
       });
     } catch (error) {
-      console.error('[AuthService] Failed to update student profile in Firebase', error);
-      throw new Error('Student profile could not be saved to Firebase.');
+      console.warn('[AuthService] Notice: Could not sync student profile to remote Firebase immediately, cached locally:', error);
     }
   }
 

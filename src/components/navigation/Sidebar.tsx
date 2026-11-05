@@ -201,6 +201,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <LogOut size={16} />
             <span>Sign Out</span>
           </button>
+
+          {/* Creator Attribution in Sidebar */}
+          <div className="mt-2 pt-2 border-t border-slate-100 px-1 text-center">
+            <span className="text-[10px] text-slate-400 block">Crafted by <strong className="text-slate-700">HARISH PRANAV S</strong></span>
+            <div className="flex items-center justify-center gap-2 text-[10px] text-blue-600 font-semibold mt-0.5">
+              <a href="tel:7845693765" className="hover:underline">7845693765</a>
+              <span>•</span>
+              <a href="mailto:harishpranavs259@gmail.com" className="hover:underline">Email</a>
+            </div>
+          </div>
         </div>
       </aside>
     </>

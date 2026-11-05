@@ -15,11 +15,16 @@ export interface CloudinaryConfig {
 
 const CLOUDINARY_STORAGE_KEY = 'signovanta_cloudinary_config';
 
+export const DEFAULT_CLOUDINARY_CONFIG: CloudinaryConfig = {
+  cloudName: 'ftiyctrq',
+  uploadPreset: 'signovanta',
+};
+
 export function getSavedCloudinaryConfig(): CloudinaryConfig | null {
   try {
     const envConfig = {
-      cloudName: import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || '',
-      uploadPreset: import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || 'signovanta_uploads',
+      cloudName: import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || DEFAULT_CLOUDINARY_CONFIG.cloudName,
+      uploadPreset: import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || DEFAULT_CLOUDINARY_CONFIG.uploadPreset,
       apiKey: import.meta.env.VITE_CLOUDINARY_API_KEY || '',
     };
     if (envConfig.cloudName) return envConfig;
@@ -32,7 +37,7 @@ export function getSavedCloudinaryConfig(): CloudinaryConfig | null {
   } catch (err) {
     console.warn('Error reading Cloudinary config:', err);
   }
-  return null;
+  return DEFAULT_CLOUDINARY_CONFIG;
 }
 
 export function saveCloudinaryConfig(config: CloudinaryConfig): void {

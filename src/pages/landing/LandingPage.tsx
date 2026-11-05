@@ -390,7 +390,7 @@ export const LandingPage: React.FC<LandingPageProps> = ({
         </div>
       </section>
 
-      {/* 7. FOOTER WITH CREATOR ATTRIBUTION (Boomika) */}
+      {/* 7. FOOTER WITH CREATOR ATTRIBUTION (HARISH PRANAV S) */}
       <footer className="mt-auto bg-slate-950 border-t border-slate-800 py-10 px-4 sm:px-6 lg:px-8 text-xs text-slate-400">
         <div className="max-w-6xl mx-auto flex flex-col md:flex-row items-center justify-between gap-6 text-center md:text-left">
           <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4">
@@ -413,14 +413,35 @@ export const LandingPage: React.FC<LandingPageProps> = ({
             </div>
           </div>
 
-          {/* Prominent Creator Attribution */}
-          <div className="p-3 bg-slate-900 rounded-2xl border border-slate-800 text-center md:text-right space-y-1">
-            <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider block">
-              Platform Architecture & Design
+          {/* Prominent Creator Attribution - HARISH PRANAV S */}
+          <div className="p-4 bg-slate-900/95 rounded-2xl border border-slate-800 text-center md:text-right space-y-2 shadow-xl ring-1 ring-white/5">
+            <span className="text-[10px] uppercase font-bold text-blue-400 tracking-wider block">
+              Platform Architecture & Full-Stack Engineering
             </span>
-            <p className="text-xs font-black text-slate-200">
-              Crafted with Pride by <span className="text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-400 font-extrabold text-sm">Boomika</span>
+            <p className="text-sm font-black text-white">
+              Crafted with Pride by{' '}
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 via-indigo-300 to-purple-400 font-extrabold text-base">
+                HARISH PRANAV S
+              </span>
             </p>
+            <div className="flex flex-wrap items-center justify-center md:justify-end gap-2 text-xs font-semibold pt-1">
+              <a
+                href="tel:7845693765"
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-blue-400 transition-all"
+                title="Call Harish Pranav S"
+              >
+                <span>📞</span>
+                <span>+91 7845693765</span>
+              </a>
+              <a
+                href="mailto:harishpranavs259@gmail.com"
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-blue-400 transition-all"
+                title="Email Harish Pranav S"
+              >
+                <span>✉️</span>
+                <span>harishpranavs259@gmail.com</span>
+              </a>
+            </div>
           </div>
         </div>
       </footer>
