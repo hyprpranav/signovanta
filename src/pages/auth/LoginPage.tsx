@@ -349,7 +349,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
         subtitle="Requests are routed directly to Master Admin Boomika for verification and activation"
         maxWidth="lg"
       >
-        <div className="space-y-4">
+        <div className="space-y-4 text-slate-900">
           {/* Switcher Tab */}
           <div className="flex bg-slate-100 p-1 rounded-2xl">
             <button
@@ -413,7 +413,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                   value={reqStdName}
                   onChange={(e) => setReqStdName(e.target.value)}
                   placeholder="e.g. SARAVANAN V"
-                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl uppercase"
+                  className="w-full px-3 py-2 text-xs bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-xl uppercase font-semibold focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
               </div>
 
@@ -428,7 +428,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                     value={reqStdRegNo}
                     onChange={(e) => setReqStdRegNo(e.target.value)}
                     placeholder="e.g. 927624BEC255"
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl font-mono uppercase"
+                    className="w-full px-3 py-2 text-xs bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-xl font-mono uppercase font-semibold focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
                 </div>
 
@@ -439,7 +439,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                   <select
                     value={reqStdSection}
                     onChange={(e) => setReqStdSection(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl font-semibold"
+                    className="w-full px-3 py-2 text-xs bg-white text-slate-900 border border-slate-300 rounded-xl font-semibold focus:outline-none focus:ring-2 focus:ring-blue-600"
                   >
                     <option value="III Year ECE A">III Year ECE A</option>
                     <option value="III Year ECE B">III Year ECE B</option>
@@ -459,7 +459,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                     value={reqStdEmail}
                     onChange={(e) => setReqStdEmail(e.target.value)}
                     placeholder="student@college.edu"
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl"
+                    className="w-full px-3 py-2 text-xs bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-xl font-medium focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
                 </div>
 
@@ -473,7 +473,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                     value={reqStdMobile}
                     onChange={(e) => setReqStdMobile(e.target.value)}
                     placeholder="10-digit mobile number"
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl font-mono"
+                    className="w-full px-3 py-2 text-xs bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-xl font-mono font-semibold focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
                 </div>
               </div>
@@ -502,7 +502,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                   value={reqStaffName}
                   onChange={(e) => setReqStaffName(e.target.value)}
                   placeholder="e.g. Dr. K. Ramanathan"
-                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl"
+                  className="w-full px-3 py-2 text-xs bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-xl font-semibold focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
               </div>
 
@@ -517,7 +517,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                     value={reqStaffId}
                     onChange={(e) => setReqStaffId(e.target.value)}
                     placeholder="e.g. ECE-FAC-04"
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl uppercase font-mono"
+                    className="w-full px-3 py-2 text-xs bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-xl uppercase font-mono font-semibold focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
                 </div>
 
@@ -529,7 +529,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                     type="text"
                     disabled
                     value="Electronics & Communication Engineering"
-                    className="w-full px-3 py-2 text-xs bg-slate-100 border border-slate-200 rounded-xl text-slate-600 font-semibold cursor-not-allowed"
+                    className="w-full px-3 py-2 text-xs bg-slate-100 border border-slate-200 rounded-xl text-slate-700 font-semibold cursor-not-allowed"
                   />
                 </div>
               </div>
@@ -545,7 +545,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                     value={reqStaffEmail}
                     onChange={(e) => setReqStaffEmail(e.target.value)}
                     placeholder="ramanathan.ece@college.edu"
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl"
+                    className="w-full px-3 py-2 text-xs bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-xl font-medium focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
                 </div>
 
@@ -559,7 +559,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                     value={reqStaffMobile}
                     onChange={(e) => setReqStaffMobile(e.target.value)}
                     placeholder="10-digit mobile number"
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl font-mono"
+                    className="w-full px-3 py-2 text-xs bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-xl font-mono font-semibold focus:outline-none focus:ring-2 focus:ring-blue-600"
                   />
                 </div>
               </div>
@@ -572,7 +572,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                   <select
                     value={reqStaffDesignation}
                     onChange={(e) => setReqStaffDesignation(e.target.value)}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl"
+                    className="w-full px-3 py-2 text-xs bg-white text-slate-900 border border-slate-300 rounded-xl font-semibold focus:outline-none focus:ring-2 focus:ring-blue-600"
                   >
                     <option value="Assistant Professor">Assistant Professor</option>
                     <option value="Associate Professor">Associate Professor</option>
@@ -587,7 +587,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                   <select
                     value={reqStaffRole}
                     onChange={(e) => setReqStaffRole(e.target.value as any)}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl font-semibold"
+                    className="w-full px-3 py-2 text-xs bg-white text-slate-900 border border-slate-300 rounded-xl font-semibold focus:outline-none focus:ring-2 focus:ring-blue-600"
                   >
                     <option value="STAFF">Faculty Coordinator (STAFF)</option>
                     <option value="AHOD">Assistant HOD (AHOD)</option>
@@ -606,7 +606,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({
                   value={reqStaffPassword}
                   onChange={(e) => setReqStaffPassword(e.target.value)}
                   placeholder="Min 6 characters"
-                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-300 rounded-xl font-mono"
+                  className="w-full px-3 py-2 text-xs bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-xl font-mono font-semibold focus:outline-none focus:ring-2 focus:ring-blue-600"
                 />
               </div>
 

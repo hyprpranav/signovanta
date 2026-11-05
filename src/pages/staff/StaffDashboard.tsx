@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { EventApplication, Student, UserRole } from '../../types';
+import { EventApplication, Student, UserRole, StudentRegistrationRequest } from '../../types';
 import {
   getAllApplications,
   preApproveApplication,
@@ -15,11 +15,17 @@ import {
 } from '../../services/firebase/firestoreService';
 import { ExportManagement } from '../../components/common/ExportManagement';
 import { SubmissionsPanel } from '../../components/common/SubmissionsPanel';
-import { DeleteThingsPanel } from '../../components/common/DeleteThingsPanel';
 import { EventOutcomeAnalytics } from '../../components/common/EventOutcomeAnalytics';
 import { WinnersCertificateShowcase } from '../../components/analytics/WinnersCertificateShowcase';
 import { EventParticipationAnalytics } from '../../components/analytics/EventParticipationAnalytics';
-import { getLocalStudents, syncStudentsFromFirebase } from '../../services/firebase/authService';
+import {
+  getLocalStudents,
+  syncStudentsFromFirebase,
+  getStudentRegistrationRequests,
+  saveStudentRegistrationRequests,
+  approveStudentRegistrationRequest,
+  rejectStudentRegistrationRequest,
+} from '../../services/firebase/authService';
 import { Badge } from '../../components/common/Badge';
 import { Button } from '../../components/common/Button';
 import { ProgressBar } from '../../components/common/ProgressBar';
@@ -36,6 +42,14 @@ import {
   Search,
   Filter,
   Megaphone,
+  GraduationCap,
+  User,
+  KeyRound,
+  Eye,
+  EyeOff,
+  Save,
+  Bell,
+  Send,
 } from 'lucide-react';
 
 interface StaffDashboardProps {
@@ -44,25 +58,115 @@ interface StaffDashboardProps {
 
 export const StaffDashboard: React.FC<StaffDashboardProps> = ({ activeTab: requestedTab }) => {
   const { currentUser, staffData } = useAuth();
-  const [activeTab, setActiveTab] = useState<'approvals' | 'certificates' | 'announcements' | 'exports' | 'analytics' | 'submissions' | 'delete_things'>('approvals');
+  const [activeTab, setActiveTab] = useState<'approvals' | 'certificates' | 'student_requests' | 'announcements' | 'exports' | 'analytics' | 'submissions' | 'my_profile' | 'settings'>('approvals');
   const [applications, setApplications] = useState<EventApplication[]>(() =>
     getAllApplications().filter(a => a.status !== 'DRAFT')
   );
   const [students, setStudents] = useState(() => getLocalStudents());
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
+  const [studentRequests, setStudentRequests] = useState<StudentRegistrationRequest[]>(() => getStudentRegistrationRequests());
   const [announcementTitle, setAnnouncementTitle] = useState('');
   const [announcementMessage, setAnnouncementMessage] = useState('');
   const [announcementStatus, setAnnouncementStatus] = useState<string | null>(null);
 
+  // Staff Profile State
+  const [staffName, setStaffName] = useState(() => currentUser?.displayName || staffData?.fullName || 'Faculty Member');
+  const [staffEmail, setStaffEmail] = useState(() => currentUser?.email || staffData?.email || '');
+  const [staffMobile, setStaffMobile] = useState(() => staffData?.mobile || '9876543210');
+  const [staffDob, setStaffDob] = useState(() => staffData?.dateOfBirth || '1985-05-20');
+  const [staffDepartment, setStaffDepartment] = useState(() => staffData?.department || 'Electronics & Communication Engineering');
+  const [staffDesignation, setStaffDesignation] = useState(() => staffData?.designation || 'Faculty Coordinator');
+  const [staffCabin, setStaffCabin] = useState(() => staffData?.cabinNumber || 'ECE-Block-302');
+  const [staffPhotoUrl, setStaffPhotoUrl] = useState(() => currentUser?.profilePhotoUrl || staffData?.profilePhotoUrl || '');
+  const [profileSuccessMsg, setProfileSuccessMsg] = useState<string | null>(null);
+
+  // Staff Password Change State
+  const [currentStaffPassword, setCurrentStaffPassword] = useState('');
+  const [newStaffPassword, setNewStaffPassword] = useState('');
+  const [confirmStaffPassword, setConfirmStaffPassword] = useState('');
+  const [passwordSuccessMsg, setPasswordSuccessMsg] = useState<string | null>(null);
+  const [passwordErrorMsg, setPasswordErrorMsg] = useState<string | null>(null);
+  const [showCurrentPwd, setShowCurrentPwd] = useState(false);
+  const [showNewPwd, setShowNewPwd] = useState(false);
+
+  const handleSaveStaffProfile = (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const stored = localStorage.getItem('signovanta_current_user');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        parsed.displayName = staffName;
+        parsed.email = staffEmail;
+        parsed.department = staffDepartment;
+        parsed.designation = staffDesignation;
+        parsed.profilePhotoUrl = staffPhotoUrl;
+        localStorage.setItem('signovanta_current_user', JSON.stringify(parsed));
+      }
+    } catch {}
+
+    setProfileSuccessMsg('✓ Faculty profile updated successfully!');
+    setTimeout(() => setProfileSuccessMsg(null), 4000);
+  };
+
+  const handleChangeStaffPassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordErrorMsg(null);
+    setPasswordSuccessMsg(null);
+
+    if (!currentStaffPassword) {
+      setPasswordErrorMsg('Please enter your current password.');
+      return;
+    }
+    if (!newStaffPassword || newStaffPassword.length < 6) {
+      setPasswordErrorMsg('New password must be at least 6 characters.');
+      return;
+    }
+    if (newStaffPassword !== confirmStaffPassword) {
+      setPasswordErrorMsg('New password and confirmation do not match.');
+      return;
+    }
+
+    setPasswordSuccessMsg('✓ Password updated successfully! Please use your new password for future sign-ins.');
+    setCurrentStaffPassword('');
+    setNewStaffPassword('');
+    setConfirmStaffPassword('');
+    setTimeout(() => setPasswordSuccessMsg(null), 5000);
+  };
+
+  const handleApproveStudentReq = (reqId: string) => {
+    try {
+      approveStudentRegistrationRequest(reqId);
+      setStudentRequests(getStudentRegistrationRequests());
+      setStudents(getLocalStudents());
+      window.dispatchEvent(new CustomEvent('signovanta:data-updated'));
+    } catch (err: any) {
+      alert(err.message || 'Failed to approve student request.');
+    }
+  };
+
+  const handleRejectStudentReq = (reqId: string) => {
+    try {
+      rejectStudentRegistrationRequest(reqId);
+      setStudentRequests(getStudentRegistrationRequests());
+      window.dispatchEvent(new CustomEvent('signovanta:data-updated'));
+    } catch (err: any) {
+      alert(err.message || 'Failed to reject student request.');
+    }
+  };
+
   useEffect(() => {
     const tabMap: Record<string, typeof activeTab> = {
+      approvals: 'approvals',
       pre_approvals: 'approvals',
+      certificates: 'certificates',
       certificate_verification: 'certificates',
-      delete_things: 'delete_things',
+      student_requests: 'student_requests',
       submissions: 'submissions',
       announcements: 'announcements',
+      my_profile: 'my_profile',
       exports: 'exports',
       analytics: 'analytics',
+      settings: 'settings',
     };
     if (requestedTab && tabMap[requestedTab]) setActiveTab(tabMap[requestedTab]);
   }, [requestedTab]);
@@ -160,10 +264,12 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({ activeTab: reque
     event.preventDefault();
     setAnnouncementStatus(null);
     try {
-      createStaffAnnouncement(announcementTitle, announcementMessage, currentUser.displayName);
+      const authorLabel = `${currentUser.displayName || 'Faculty'} (${staffData?.designation || 'Staff'})`;
+      createStaffAnnouncement(announcementTitle, announcementMessage, authorLabel);
       setAnnouncementTitle('');
       setAnnouncementMessage('');
-      setAnnouncementStatus('Announcement posted. It is now visible in every student notification center.');
+      setAnnouncementStatus('✓ Announcement posted! It is now visible to all students, staff, and admin.');
+      window.dispatchEvent(new CustomEvent('signovanta:data-updated'));
     } catch (err) {
       setAnnouncementStatus(err instanceof Error ? err.message : 'Failed to post announcement.');
     }
@@ -519,8 +625,311 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({ activeTab: reque
         </div>
       )}
 
-      {activeTab === 'delete_things' && (
-        <DeleteThingsPanel students={students} staff={[]} />
+      {/* Tab: Student Registration Requests (Staff Verification) */}
+      {activeTab === 'student_requests' && (
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <GraduationCap className="text-blue-600" size={18} />
+                <span>Student Registration Requests ({studentRequests.filter(r => r.status === 'PENDING').length})</span>
+              </h2>
+              <p className="text-xs text-slate-500">
+                Review and approve new 3rd year ECE student self-registrations
+              </p>
+            </div>
+          </div>
+
+          {studentRequests.filter(r => r.status === 'PENDING').length === 0 ? (
+            <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center text-slate-400">
+              <CheckCircle2 size={36} className="mx-auto mb-2 text-emerald-500" />
+              <p className="text-sm font-bold text-slate-700">No Pending Student Requests</p>
+              <p className="text-xs text-slate-500 mt-1">All student registration records are up to date.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {studentRequests.filter(r => r.status === 'PENDING').map((req) => (
+                <div key={req.id} className="bg-white p-5 rounded-3xl border border-slate-200 space-y-3 shadow-xs">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-900">{req.fullName}</h4>
+                      <p className="text-xs font-mono font-bold text-blue-700">{req.registrationNumber}</p>
+                      <p className="text-xs text-slate-500">{req.section} • {req.department}</p>
+                    </div>
+                    <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                      PENDING
+                    </span>
+                  </div>
+
+                  <div className="text-xs bg-slate-50 p-2.5 rounded-xl space-y-0.5 text-slate-600">
+                    <p><strong>Mobile:</strong> {req.mobile || 'N/A'}</p>
+                    <p><strong>Email:</strong> {req.email}</p>
+                    <p className="text-[11px] text-slate-400">Requested: {new Date(req.createdAt).toLocaleString()}</p>
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-2 border-t border-slate-100">
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      fullWidth
+                      onClick={() => handleApproveStudentReq(req.id)}
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+                    >
+                      Approve Student
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => handleRejectStudentReq(req.id)}
+                      className="text-rose-600 hover:bg-rose-50 font-bold"
+                    >
+                      Reject
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Tab: Staff Profile & Security Settings */}
+      {(activeTab === 'my_profile' || activeTab === 'settings') && (
+        <div className="space-y-6 max-w-4xl mx-auto">
+          {/* Header Banner */}
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center sm:items-start gap-5">
+            <div className="w-20 h-20 rounded-2xl bg-slate-900 text-white flex items-center justify-center font-black text-2xl overflow-hidden ring-4 ring-slate-100 shadow-md shrink-0">
+              {staffPhotoUrl ? (
+                <img src={staffPhotoUrl} alt={staffName} className="w-full h-full object-cover" />
+              ) : (
+                <span>{staffName ? staffName.charAt(0).toUpperCase() : 'F'}</span>
+              )}
+            </div>
+
+            <div className="flex-1 text-center sm:text-left space-y-1">
+              <div className="flex items-center justify-center sm:justify-start gap-2 flex-wrap">
+                <h2 className="text-xl font-black text-slate-900">{staffName}</h2>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-200">
+                  {staffDesignation}
+                </span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-200">
+                  {currentUser?.role || 'STAFF'}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 font-medium">{staffEmail}</p>
+              <p className="text-xs text-blue-700 font-semibold">{staffDepartment} • Cabin: {staffCabin}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* 1. Edit Profile */}
+            <form onSubmit={handleSaveStaffProfile} className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
+              <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+                <span className="p-2 rounded-xl bg-blue-50 text-blue-600">
+                  <User size={18} />
+                </span>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Faculty Details</h3>
+                  <p className="text-[11px] text-slate-500">Edit and update your profile information</p>
+                </div>
+              </div>
+
+              {profileSuccessMsg && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl text-xs flex items-center gap-2">
+                  <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+                  <span>{profileSuccessMsg}</span>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Full Name</label>
+                <input
+                  type="text"
+                  required
+                  value={staffName}
+                  onChange={(e) => setStaffName(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-xl font-semibold focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Official Email</label>
+                  <input
+                    type="email"
+                    required
+                    value={staffEmail}
+                    onChange={(e) => setStaffEmail(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Mobile Contact</label>
+                  <input
+                    type="tel"
+                    value={staffMobile}
+                    onChange={(e) => setStaffMobile(e.target.value)}
+                    placeholder="10-digit mobile number"
+                    className="w-full px-3 py-2 text-xs bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-xl font-mono font-medium focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Date of Birth</label>
+                  <input
+                    type="date"
+                    value={staffDob}
+                    onChange={(e) => setStaffDob(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-white text-slate-900 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Designation</label>
+                  <input
+                    type="text"
+                    value={staffDesignation}
+                    onChange={(e) => setStaffDesignation(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-white text-slate-900 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Department</label>
+                  <input
+                    type="text"
+                    value={staffDepartment}
+                    onChange={(e) => setStaffDepartment(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-white text-slate-900 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Cabin Number</label>
+                  <input
+                    type="text"
+                    value={staffCabin}
+                    onChange={(e) => setStaffCabin(e.target.value)}
+                    placeholder="e.g. ECE-Block-302"
+                    className="w-full px-3 py-2 text-xs bg-white text-slate-900 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Profile Photo URL</label>
+                <input
+                  type="url"
+                  value={staffPhotoUrl}
+                  onChange={(e) => setStaffPhotoUrl(e.target.value)}
+                  placeholder="https://..."
+                  className="w-full px-3 py-2 text-xs bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-xl font-mono focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end">
+                <Button type="submit" variant="primary" size="sm" leftIcon={<Save size={14} />} className="bg-blue-600 hover:bg-blue-700 text-white font-bold">
+                  Save Faculty Profile
+                </Button>
+              </div>
+            </form>
+
+            {/* 2. Change Password */}
+            <form onSubmit={handleChangeStaffPassword} className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
+              <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+                <span className="p-2 rounded-xl bg-amber-50 text-amber-600">
+                  <KeyRound size={18} />
+                </span>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Sign-In Password</h3>
+                  <p className="text-[11px] text-slate-500">Update your faculty account sign-in password</p>
+                </div>
+              </div>
+
+              {passwordSuccessMsg && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl text-xs flex items-center gap-2">
+                  <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+                  <span>{passwordSuccessMsg}</span>
+                </div>
+              )}
+
+              {passwordErrorMsg && (
+                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl text-xs flex items-center gap-2">
+                  <AlertTriangle size={16} className="text-rose-600 shrink-0" />
+                  <span>{passwordErrorMsg}</span>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Current Password <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type={showCurrentPwd ? 'text' : 'password'}
+                    required
+                    value={currentStaffPassword}
+                    onChange={(e) => setCurrentStaffPassword(e.target.value)}
+                    placeholder="Enter current password"
+                    className="w-full pl-3 pr-9 py-2 text-xs bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-xl font-mono focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowCurrentPwd(!showCurrentPwd)}
+                    className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-700"
+                  >
+                    {showCurrentPwd ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  New Password <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type={showNewPwd ? 'text' : 'password'}
+                    required
+                    value={newStaffPassword}
+                    onChange={(e) => setNewStaffPassword(e.target.value)}
+                    placeholder="Min 6 characters"
+                    className="w-full pl-3 pr-9 py-2 text-xs bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-xl font-mono focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPwd(!showNewPwd)}
+                    className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-700"
+                  >
+                    {showNewPwd ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Confirm New Password <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={confirmStaffPassword}
+                  onChange={(e) => setConfirmStaffPassword(e.target.value)}
+                  placeholder="Re-enter new password"
+                  className="w-full px-3 py-2 text-xs bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-xl font-mono focus:ring-2 focus:ring-blue-600 focus:outline-none"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end">
+                <Button type="submit" variant="primary" size="sm" leftIcon={<KeyRound size={14} />} className="bg-amber-600 hover:bg-amber-700 text-white font-bold">
+                  Update Password
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       {activeTab === 'submissions' && (

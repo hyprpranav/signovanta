@@ -1,7 +1,7 @@
 import React from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { EventApplication } from '../../types';
-import { getApplicationsForStudent } from '../../services/firebase/firestoreService';
+import { getApplicationsForStudent, getUserNotifications } from '../../services/firebase/firestoreService';
 import { ProgressBar } from '../../components/common/ProgressBar';
 import { Badge } from '../../components/common/Badge';
 import { Button } from '../../components/common/Button';
@@ -16,6 +16,7 @@ import {
   ExternalLink,
   ChevronRight,
   Sparkles,
+  Megaphone,
 } from 'lucide-react';
 
 interface StudentDashboardProps {
@@ -37,6 +38,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
   const applications = getApplicationsForStudent(studentData.registrationNumber);
   const drafts = applications.filter(a => a.status === 'DRAFT');
+  const announcements = getUserNotifications('ALL');
 
   // Statistics calculation
   const totalEvents = applications.filter(a => a.status !== 'DRAFT').length;
@@ -89,6 +91,39 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
         {/* Subtle background glow */}
         <div className="absolute right-0 top-0 -mr-16 -mt-16 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
       </div>
+
+      {/* Official Department & Institutional Announcements */}
+      {announcements.length > 0 && (
+        <div className="bg-gradient-to-r from-blue-50 via-indigo-50 to-purple-50 rounded-3xl border border-blue-200/80 p-5 space-y-3 shadow-2xs">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className="p-1.5 rounded-xl bg-blue-600 text-white shadow-2xs">
+                <Megaphone size={16} />
+              </span>
+              <h3 className="text-sm font-black text-slate-900 tracking-tight">
+                Official Announcements & Broadcasts
+              </h3>
+            </div>
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-200">
+              {announcements.length} Active
+            </span>
+          </div>
+
+          <div className="space-y-2">
+            {announcements.slice(0, 3).map((item) => (
+              <div key={item.id} className="bg-white/95 backdrop-blur-xs p-3.5 rounded-2xl border border-blue-100 shadow-3xs space-y-1">
+                <div className="flex items-start justify-between gap-2">
+                  <h4 className="text-xs font-bold text-slate-900">{item.title}</h4>
+                  <span className="text-[10px] font-mono text-slate-400 shrink-0">
+                    {new Date(item.createdAt).toLocaleDateString()}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap">{item.message}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Saved Drafts Reminder Banner */}
       {drafts.length > 0 && (

@@ -94,27 +94,30 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
-  // Staff Nav Items (Shared across STAFF, HOD, AHOD)
+  // Staff Nav Items (Shared across STAFF, HOD, AHOD - NO delete_things)
   const staffNav: NavItem[] = [
-    { id: 'staff_dashboard', label: 'Staff Overview', icon: LayoutDashboard },
-    { id: 'submissions', label: 'Submissions', icon: FileText, notificationCount: notifications.pendingSubmissions },
-    { id: 'pre_approvals', label: 'Pre-Event Approvals (50%)', icon: CheckSquare, notificationCount: notifications.pendingSubmissions },
-    { id: 'certificate_verification', label: 'Certificate Verification (100%)', icon: FileCheck, notificationCount: notifications.pendingCertificates },
+    { id: 'approvals', label: 'Pre-Event Approvals (50%)', icon: CheckSquare, notificationCount: notifications.pendingSubmissions },
+    { id: 'certificates', label: 'Certificate Verification (100%)', icon: FileCheck, notificationCount: notifications.pendingCertificates },
+    { id: 'student_requests', label: 'Student Registration Requests', icon: GraduationCap, notificationCount: notifications.pendingRegistrations },
+    { id: 'submissions', label: 'Submissions Directory', icon: FileText },
     { id: 'announcements', label: 'Announcements', icon: Bell },
-    { id: 'exports', label: 'Exports', icon: BarChart3 },
+    { id: 'my_profile', label: 'Staff Profile', icon: User },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+    { id: 'exports', label: 'Exports', icon: BarChart3 },
     { id: 'issues', label: 'Facing Issues?', icon: AlertCircle, notificationCount: notifications.unresolvedIssues },
-    { id: 'settings', label: 'Settings', icon: Settings },
+    { id: 'settings', label: 'Settings & Security', icon: Settings },
   ];
 
   // Master Admin Nav Items
   const adminNav: NavItem[] = [
     { id: 'overview', label: 'Control Center', icon: LayoutDashboard },
+    { id: 'my_profile', label: 'Admin Profile', icon: User },
     { id: 'students', label: 'Student Management', icon: GraduationCap, highlight: true },
     { id: 'staff', label: 'Staff & Role Requests', icon: Briefcase, notificationCount: notifications.pendingStaff },
+    { id: 'approvals', label: 'Registration Approvals', icon: CheckSquare, notificationCount: notifications.pendingRegistrations },
+    { id: 'submissions', label: 'Submissions & Verifications', icon: FileText, notificationCount: notifications.pendingSubmissions },
+    { id: 'announcements', label: 'Announcements', icon: Bell },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
-    { id: 'approvals', label: 'Application Approvals', icon: CheckSquare, notificationCount: notifications.pendingRegistrations },
-    { id: 'submissions', label: 'Submissions', icon: FileText, notificationCount: notifications.pendingSubmissions },
     { id: 'categories', label: 'Event Categories', icon: FileText },
     { id: 'exports', label: 'Exports', icon: BarChart3 },
     { id: 'issues', label: 'Requests & Issues', icon: AlertCircle, notificationCount: notifications.unresolvedIssues },

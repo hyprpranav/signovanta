@@ -199,9 +199,9 @@ const MainAppLayout: React.FC = () => {
 
   const role = currentUser.role;
   const validTabs = role === 'MASTER_ADMIN'
-    ? ['overview', 'students', 'staff', 'analytics', 'approvals', 'submissions', 'categories', 'exports', 'issues', 'settings', 'delete_things']
+    ? ['overview', 'my_profile', 'students', 'staff', 'analytics', 'approvals', 'submissions', 'announcements', 'categories', 'exports', 'issues', 'settings', 'delete_things']
     : ['STAFF', 'HOD', 'AHOD'].includes(role)
-    ? ['approvals', 'submissions', 'certificates', 'announcements', 'exports', 'analytics', 'issues', 'settings', 'delete_things']
+    ? ['approvals', 'certificates', 'student_requests', 'submissions', 'announcements', 'my_profile', 'exports', 'analytics', 'issues', 'settings']
     : ['dashboard', 'new_event', 'my_profile', 'applications', 'history', 'issues', 'settings'];
   const selectedTab = validTabs.includes(currentTab)
     ? currentTab

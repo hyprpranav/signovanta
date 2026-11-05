@@ -111,6 +111,8 @@ export interface Staff {
   isSuspended: boolean;
   uid?: string;
   profilePhotoUrl?: string;
+  dateOfBirth?: string;
+  cabinNumber?: string;
   createdAt: string;
   approvedAt?: string;
   approvedBy?: string;

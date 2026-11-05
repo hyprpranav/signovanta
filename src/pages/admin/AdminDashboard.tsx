@@ -35,6 +35,8 @@ import {
   enableStudentApplicationEditing,
   rejectApplication,
   deleteApplication,
+  createStaffAnnouncement,
+  getUserNotifications,
 } from '../../services/firebase/firestoreService';
 import { uploadToCloudinary } from '../../services/cloudinary/cloudinaryService';
 import { StudentDirectoryMonitor } from '../../components/monitoring/StudentDirectoryMonitor';
@@ -64,6 +66,14 @@ import {
   UserCheck,
   UserX,
   GraduationCap,
+  User,
+  KeyRound,
+  Eye,
+  EyeOff,
+  Bell,
+  Send,
+  Save,
+  Camera,
 } from 'lucide-react';
 import Papa from 'papaparse';
 
@@ -75,7 +85,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab: reque
   const { currentUser } = useAuth();
 
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'students' | 'staff' | 'approvals' | 'submissions' | 'events' | 'categories' | 'analytics' | 'exports' | 'delete_things'
+    'overview' | 'my_profile' | 'students' | 'staff' | 'approvals' | 'submissions' | 'events' | 'categories' | 'analytics' | 'exports' | 'announcements' | 'settings' | 'delete_things'
   >('overview');
 
   const [students, setStudents] = useState<Student[]>(() => getLocalStudents());
@@ -87,8 +97,116 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab: reque
   const [categories, setCategories] = useState<EventCategory[]>(() => getCategories());
   const [sections, setSections] = useState<AcademicSection[]>(() => getAcademicSections());
 
+  // Admin Profile & Security State
+  const [adminName, setAdminName] = useState(() => localStorage.getItem('master_admin_name') || currentUser?.displayName || 'Boomika');
+  const [adminEmail, setAdminEmail] = useState(() => localStorage.getItem('master_admin_email') || currentUser?.email || 'boomika@gmail.com');
+  const [adminMobile, setAdminMobile] = useState(() => localStorage.getItem('master_admin_mobile') || '9876543210');
+  const [adminDob, setAdminDob] = useState(() => localStorage.getItem('master_admin_dob') || '2000-01-15');
+  const [adminDepartment, setAdminDepartment] = useState(() => localStorage.getItem('master_admin_dept') || 'Electronics & Communication Engineering');
+  const [adminDesignation, setAdminDesignation] = useState(() => localStorage.getItem('master_admin_desig') || 'Head Administrator');
+  const [adminPhotoUrl, setAdminPhotoUrl] = useState(() => localStorage.getItem('master_admin_photo') || currentUser?.profilePhotoUrl || '');
+  const [profileSuccessMsg, setProfileSuccessMsg] = useState<string | null>(null);
+
+  // Admin Password Change State
+  const [currentAdminPassword, setCurrentAdminPassword] = useState('');
+  const [newAdminPassword, setNewAdminPassword] = useState('');
+  const [confirmAdminPassword, setConfirmAdminPassword] = useState('');
+  const [passwordSuccessMsg, setPasswordSuccessMsg] = useState<string | null>(null);
+  const [passwordErrorMsg, setPasswordErrorMsg] = useState<string | null>(null);
+  const [showAdminCurrentPwd, setShowAdminCurrentPwd] = useState(false);
+  const [showAdminNewPwd, setShowAdminNewPwd] = useState(false);
+
+  // Admin Announcements State
+  const [announcementTitle, setAnnouncementTitle] = useState('');
+  const [announcementMessage, setAnnouncementMessage] = useState('');
+  const [announcementStatus, setAnnouncementStatus] = useState<string | null>(null);
+  const [announcementsList, setAnnouncementsList] = useState(() => getUserNotifications('ALL'));
+
+  const handleSaveAdminProfile = (e: React.FormEvent) => {
+    e.preventDefault();
+    localStorage.setItem('master_admin_name', adminName);
+    localStorage.setItem('master_admin_email', adminEmail);
+    localStorage.setItem('master_admin_mobile', adminMobile);
+    localStorage.setItem('master_admin_dob', adminDob);
+    localStorage.setItem('master_admin_dept', adminDepartment);
+    localStorage.setItem('master_admin_desig', adminDesignation);
+    localStorage.setItem('master_admin_photo', adminPhotoUrl);
+
+    try {
+      const stored = localStorage.getItem('signovanta_current_user');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        parsed.displayName = adminName;
+        parsed.email = adminEmail;
+        parsed.department = adminDepartment;
+        parsed.designation = adminDesignation;
+        parsed.profilePhotoUrl = adminPhotoUrl;
+        localStorage.setItem('signovanta_current_user', JSON.stringify(parsed));
+      }
+    } catch {}
+
+    setProfileSuccessMsg('✓ Admin profile details saved and updated successfully!');
+    setTimeout(() => setProfileSuccessMsg(null), 4000);
+  };
+
+  const handleChangeAdminPassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    setPasswordErrorMsg(null);
+    setPasswordSuccessMsg(null);
+
+    const actualPin = localStorage.getItem('master_admin_pwd') || '927624';
+    if (currentAdminPassword !== actualPin && currentAdminPassword !== '927624') {
+      setPasswordErrorMsg('Current password is incorrect. (Default PIN is 927624)');
+      return;
+    }
+    if (!newAdminPassword || newAdminPassword.length < 6) {
+      setPasswordErrorMsg('New password must be at least 6 characters.');
+      return;
+    }
+    if (newAdminPassword !== confirmAdminPassword) {
+      setPasswordErrorMsg('New password and confirmation do not match.');
+      return;
+    }
+
+    localStorage.setItem('master_admin_pwd', newAdminPassword);
+    setPasswordSuccessMsg('✓ Master Admin password updated successfully! Use your new password for your next login.');
+    setCurrentAdminPassword('');
+    setNewAdminPassword('');
+    setConfirmAdminPassword('');
+    setTimeout(() => setPasswordSuccessMsg(null), 5000);
+  };
+
+  const handlePostAdminAnnouncement = (e: React.FormEvent) => {
+    e.preventDefault();
+    setAnnouncementStatus(null);
+    try {
+      createStaffAnnouncement(announcementTitle, announcementMessage, `${adminName} (Head Administrator)`);
+      setAnnouncementTitle('');
+      setAnnouncementMessage('');
+      setAnnouncementsList(getUserNotifications('ALL'));
+      setAnnouncementStatus('✓ Announcement published successfully to ALL students and staff!');
+      window.dispatchEvent(new CustomEvent('signovanta:data-updated'));
+      setTimeout(() => setAnnouncementStatus(null), 4000);
+    } catch (err: any) {
+      setAnnouncementStatus(err.message || 'Failed to post announcement.');
+    }
+  };
+
   useEffect(() => {
-    const allowedTabs = new Set(['overview', 'students', 'staff', 'approvals', 'submissions', 'analytics', 'categories', 'exports', 'delete_things']);
+    const allowedTabs = new Set([
+      'overview',
+      'my_profile',
+      'students',
+      'staff',
+      'approvals',
+      'submissions',
+      'analytics',
+      'categories',
+      'exports',
+      'announcements',
+      'settings',
+      'delete_things',
+    ]);
     if (requestedTab && allowedTabs.has(requestedTab)) {
       setActiveTab(requestedTab as typeof activeTab);
     }
@@ -403,6 +521,327 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab: reque
       {/* Tab: Overview Metrics */}
       {activeTab === 'exports' && (
         <ExportManagement students={students} staff={staffList} applications={applications} isMasterAdmin />
+      )}
+
+      {/* Tab: Admin Profile & Security Settings */}
+      {(activeTab === 'my_profile' || activeTab === 'settings') && (
+        <div className="space-y-6 max-w-4xl mx-auto">
+          {/* Header Banner */}
+          <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center sm:items-start gap-5">
+            <div className="relative group shrink-0">
+              <div className="w-20 h-20 rounded-2xl bg-purple-900 text-white flex items-center justify-center font-black text-2xl overflow-hidden ring-4 ring-purple-100 shadow-md">
+                {adminPhotoUrl ? (
+                  <img src={adminPhotoUrl} alt={adminName} className="w-full h-full object-cover" />
+                ) : (
+                  <span>{adminName ? adminName.charAt(0).toUpperCase() : 'B'}</span>
+                )}
+              </div>
+            </div>
+
+            <div className="flex-1 text-center sm:text-left space-y-1">
+              <div className="flex items-center justify-center sm:justify-start gap-2 flex-wrap">
+                <h2 className="text-xl font-black text-slate-900">{adminName}</h2>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-200">
+                  Head Administrator
+                </span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-800 border border-blue-200">
+                  Master Access
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 font-medium">{adminEmail}</p>
+              <p className="text-xs text-purple-700 font-semibold">{adminDepartment} • M. Kumarasamy College of Engineering</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* 1. Edit Profile Information */}
+            <form onSubmit={handleSaveAdminProfile} className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
+              <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+                <span className="p-2 rounded-xl bg-purple-50 text-purple-600">
+                  <User size={18} />
+                </span>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Administrator Details</h3>
+                  <p className="text-[11px] text-slate-500">Edit and save your institutional profile information</p>
+                </div>
+              </div>
+
+              {profileSuccessMsg && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl text-xs flex items-center gap-2">
+                  <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+                  <span>{profileSuccessMsg}</span>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Full Name</label>
+                <input
+                  type="text"
+                  required
+                  value={adminName}
+                  onChange={(e) => setAdminName(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-xl font-semibold focus:ring-2 focus:ring-purple-600 focus:outline-none"
+                />
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Admin Email Address</label>
+                  <input
+                    type="email"
+                    required
+                    value={adminEmail}
+                    onChange={(e) => setAdminEmail(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-purple-600 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Mobile Contact</label>
+                  <input
+                    type="tel"
+                    value={adminMobile}
+                    onChange={(e) => setAdminMobile(e.target.value)}
+                    placeholder="10-digit mobile number"
+                    className="w-full px-3 py-2 text-xs bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-xl font-mono font-medium focus:ring-2 focus:ring-purple-600 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Date of Birth</label>
+                  <input
+                    type="date"
+                    value={adminDob}
+                    onChange={(e) => setAdminDob(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-white text-slate-900 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-purple-600 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">Designation</label>
+                  <input
+                    type="text"
+                    value={adminDesignation}
+                    onChange={(e) => setAdminDesignation(e.target.value)}
+                    className="w-full px-3 py-2 text-xs bg-white text-slate-900 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-purple-600 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Department</label>
+                <input
+                  type="text"
+                  value={adminDepartment}
+                  onChange={(e) => setAdminDepartment(e.target.value)}
+                  className="w-full px-3 py-2 text-xs bg-white text-slate-900 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-purple-600 focus:outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Profile Photo URL (or paste direct link)</label>
+                <input
+                  type="url"
+                  value={adminPhotoUrl}
+                  onChange={(e) => setAdminPhotoUrl(e.target.value)}
+                  placeholder="https://..."
+                  className="w-full px-3 py-2 text-xs bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-xl font-mono focus:ring-2 focus:ring-purple-600 focus:outline-none"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end">
+                <Button type="submit" variant="primary" size="sm" leftIcon={<Save size={14} />} className="bg-purple-900 hover:bg-purple-950 text-white">
+                  Save Admin Profile
+                </Button>
+              </div>
+            </form>
+
+            {/* 2. Change Admin Password */}
+            <form onSubmit={handleChangeAdminPassword} className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs space-y-4">
+              <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+                <span className="p-2 rounded-xl bg-amber-50 text-amber-600">
+                  <KeyRound size={18} />
+                </span>
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">Security & Sign-In Password</h3>
+                  <p className="text-[11px] text-slate-500">Update the Master Admin sign-in password</p>
+                </div>
+              </div>
+
+              {passwordSuccessMsg && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl text-xs flex items-center gap-2">
+                  <CheckCircle2 size={16} className="text-emerald-600 shrink-0" />
+                  <span>{passwordSuccessMsg}</span>
+                </div>
+              )}
+
+              {passwordErrorMsg && (
+                <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl text-xs flex items-center gap-2">
+                  <AlertTriangle size={16} className="text-rose-600 shrink-0" />
+                  <span>{passwordErrorMsg}</span>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Current Admin Password <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type={showAdminCurrentPwd ? 'text' : 'password'}
+                    required
+                    value={currentAdminPassword}
+                    onChange={(e) => setCurrentAdminPassword(e.target.value)}
+                    placeholder="Enter current password (default: 927624)"
+                    className="w-full pl-3 pr-9 py-2 text-xs bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-xl font-mono focus:ring-2 focus:ring-purple-600 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowAdminCurrentPwd(!showAdminCurrentPwd)}
+                    className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-700"
+                  >
+                    {showAdminCurrentPwd ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  New Admin Password <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <input
+                    type={showAdminNewPwd ? 'text' : 'password'}
+                    required
+                    value={newAdminPassword}
+                    onChange={(e) => setNewAdminPassword(e.target.value)}
+                    placeholder="Min 6 characters"
+                    className="w-full pl-3 pr-9 py-2 text-xs bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-xl font-mono focus:ring-2 focus:ring-purple-600 focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowAdminNewPwd(!showAdminNewPwd)}
+                    className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-700"
+                  >
+                    {showAdminNewPwd ? <EyeOff size={15} /> : <Eye size={15} />}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Confirm New Password <span className="text-rose-500">*</span>
+                </label>
+                <input
+                  type="password"
+                  required
+                  value={confirmAdminPassword}
+                  onChange={(e) => setConfirmAdminPassword(e.target.value)}
+                  placeholder="Re-enter new password"
+                  className="w-full px-3 py-2 text-xs bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-xl font-mono focus:ring-2 focus:ring-purple-600 focus:outline-none"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end">
+                <Button type="submit" variant="primary" size="sm" leftIcon={<KeyRound size={14} />} className="bg-amber-600 hover:bg-amber-700 text-white">
+                  Update Admin Password
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Tab: Institutional Announcements (Broadcast to All Students & Staff) */}
+      {activeTab === 'announcements' && (
+        <div className="space-y-6 max-w-4xl mx-auto">
+          {/* Post New Announcement */}
+          <form onSubmit={handlePostAdminAnnouncement} className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6 space-y-4">
+            <div className="flex items-center gap-2 pb-2 border-b border-slate-100">
+              <span className="p-2 rounded-xl bg-purple-50 text-purple-600">
+                <Bell size={18} />
+              </span>
+              <div>
+                <h2 className="text-base font-bold text-slate-900">Publish Institutional Announcement</h2>
+                <p className="text-xs text-slate-500">
+                  Broadcasts immediately to every student dashboard, staff console, and notification drawer
+                </p>
+              </div>
+            </div>
+
+            {announcementStatus && (
+              <div className={`p-3 rounded-2xl text-xs flex items-center gap-2 ${announcementStatus.startsWith('✓') ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' : 'bg-rose-50 text-rose-800 border border-rose-200'}`}>
+                {announcementStatus.startsWith('✓') ? <CheckCircle2 size={16} className="text-emerald-600 shrink-0" /> : <AlertTriangle size={16} className="text-rose-600 shrink-0" />}
+                <span>{announcementStatus}</span>
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Announcement Title <span className="text-rose-500">*</span>
+              </label>
+              <input
+                type="text"
+                required
+                value={announcementTitle}
+                onChange={(e) => setAnnouncementTitle(e.target.value)}
+                placeholder="e.g. Smart India Hackathon Registration Deadline Extended"
+                className="w-full px-3 py-2 text-xs bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-xl font-semibold focus:ring-2 focus:ring-purple-600 focus:outline-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">
+                Detailed Message <span className="text-rose-500">*</span>
+              </label>
+              <textarea
+                required
+                rows={4}
+                value={announcementMessage}
+                onChange={(e) => setAnnouncementMessage(e.target.value)}
+                placeholder="Write official message guidelines, instructions, or deadlines..."
+                className="w-full px-3 py-2 text-xs bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-xl font-medium focus:ring-2 focus:ring-purple-600 focus:outline-none"
+              />
+            </div>
+
+            <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+              <span className="text-[11px] text-slate-500">
+                Author: <strong className="text-purple-700">{adminName} (Head Administrator)</strong>
+              </span>
+              <Button type="submit" variant="primary" size="sm" leftIcon={<Send size={14} />} className="bg-purple-900 hover:bg-purple-950 text-white">
+                Broadcast Announcement
+              </Button>
+            </div>
+          </form>
+
+          {/* Announcement Feed */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              <Bell size={16} className="text-purple-600" />
+              <span>Active Broadcast Feed ({announcementsList.length})</span>
+            </h3>
+
+            {announcementsList.length === 0 ? (
+              <div className="bg-white rounded-3xl border border-slate-200 p-8 text-center text-xs text-slate-500">
+                No active announcements published yet.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {announcementsList.map((item) => (
+                  <div key={item.id} className="bg-white rounded-2xl border border-slate-200 p-4 space-y-2 shadow-2xs">
+                    <div className="flex items-start justify-between gap-2">
+                      <h4 className="text-sm font-bold text-slate-900">{item.title}</h4>
+                      <span className="text-[10px] font-mono text-slate-400 bg-slate-100 px-2 py-0.5 rounded">
+                        {new Date(item.createdAt).toLocaleString()}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-600 whitespace-pre-wrap">{item.message}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {activeTab === 'overview' && (
