@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { EventApplication, ParticipationType, EventMode } from '../../types';
-import { getCategories, createApplication } from '../../services/firebase/firestoreService';
+import { getCategories, createApplication, updateApplication } from '../../services/firebase/firestoreService';
 import { uploadToCloudinary } from '../../services/cloudinary/cloudinaryService';
 import { Button } from '../../components/common/Button';
 import {
@@ -17,39 +17,51 @@ import {
   AlertCircle,
   ArrowLeft,
   Save,
+  Pencil,
 } from 'lucide-react';
 
 interface NewEventFormProps {
   onBack: () => void;
   onSuccess: (app: EventApplication) => void;
+  initialData?: EventApplication | null;
 }
 
-export const NewEventForm: React.FC<NewEventFormProps> = ({ onBack, onSuccess }) => {
+export const NewEventForm: React.FC<NewEventFormProps> = ({ onBack, onSuccess, initialData }) => {
   const { currentUser, studentData } = useAuth();
   const categories = getCategories().filter(c => c.isActive);
 
-  // Form Fields
-  const [eventCategory, setEventCategory] = useState(categories[0]?.name || 'Hackathon');
-  const [eventName, setEventName] = useState('');
-  const [organizerName, setOrganizerName] = useState('');
-  const [institutionName, setInstitutionName] = useState('');
-  const [eventLocation, setEventLocation] = useState('');
-  const [startDate, setStartDate] = useState('');
-  const [endDate, setEndDate] = useState('');
-  const [eventMode, setEventMode] = useState<EventMode>('OFFLINE');
-  const [eventWebsite, setEventWebsite] = useState('');
-  const [registrationLink, setRegistrationLink] = useState('');
-  const [eventDescription, setEventDescription] = useState('');
-  const [parentGuardianName, setParentGuardianName] = useState('');
-  const [parentGuardianMobile, setParentGuardianMobile] = useState('');
-  const [guideName, setGuideName] = useState('');
-  const [participationType, setParticipationType] = useState<ParticipationType>('INDIVIDUAL');
-  const [teamName, setTeamName] = useState('');
-  const [teamSize, setTeamSize] = useState(2);
-  const [teamMembers, setTeamMembers] = useState<Array<{ registrationNumber: string; fullName: string }>>([]);
+  // Form Fields (Pre-populated from initialData if editing draft)
+  const [eventCategory, setEventCategory] = useState(
+    initialData?.eventCategory || categories[0]?.name || 'Hackathon'
+  );
+  const [eventName, setEventName] = useState(initialData?.eventName || '');
+  const [organizerName, setOrganizerName] = useState(initialData?.organizerName || '');
+  const [institutionName, setInstitutionName] = useState(initialData?.institutionName || '');
+  const [eventLocation, setEventLocation] = useState(initialData?.eventLocation || '');
+  const [startDate, setStartDate] = useState(initialData?.startDate || '');
+  const [endDate, setEndDate] = useState(initialData?.endDate || '');
+  const [eventMode, setEventMode] = useState<EventMode>(initialData?.eventMode || 'OFFLINE');
+  const [eventWebsite, setEventWebsite] = useState(initialData?.eventWebsite || '');
+  const [registrationLink, setRegistrationLink] = useState(initialData?.registrationLink || '');
+  const [eventDescription, setEventDescription] = useState(initialData?.eventDescription || '');
+  const [parentGuardianName, setParentGuardianName] = useState(initialData?.parentGuardianName || '');
+  const [parentGuardianMobile, setParentGuardianMobile] = useState(initialData?.parentGuardianMobile || '');
+  const [guideName, setGuideName] = useState(
+    initialData?.facultyCoordinator || initialData?.guideName || ''
+  );
+  const [participationType, setParticipationType] = useState<ParticipationType>(
+    initialData?.participationType || 'INDIVIDUAL'
+  );
+  const [teamName, setTeamName] = useState(initialData?.teamName || '');
+  const [teamSize, setTeamSize] = useState(initialData?.teamSize || 2);
+  const [teamMembers, setTeamMembers] = useState<Array<{ registrationNumber: string; fullName: string }>>(
+    initialData?.teamMembers || []
+  );
 
   // Brochure Upload
-  const [browserUrl, setBrowserUrl] = useState('');
+  const [browserUrl, setBrowserUrl] = useState(
+    initialData?.brochureUrl || initialData?.browserUrl || ''
+  );
   const [uploadingBrochure, setUploadingBrochure] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
 
@@ -177,9 +189,20 @@ export const NewEventForm: React.FC<NewEventFormProps> = ({ onBack, onSuccess })
         if (teamMembers && teamMembers.length > 0) payload.teamMembers = teamMembers;
       }
 
-      const newApp = createApplication(payload, isDraft);
+      let resultApp: EventApplication;
+      if (initialData?.id) {
+        // Updating existing draft
+        resultApp = updateApplication(initialData.id, {
+          ...payload,
+          status: isDraft ? 'DRAFT' : 'SUBMITTED',
+          progressPercent: 0,
+        });
+      } else {
+        // Creating new event application
+        resultApp = createApplication(payload, isDraft);
+      }
 
-      onSuccess(newApp);
+      onSuccess(resultApp);
     } catch (err: any) {
       setError(err.message || 'Failed to submit application.');
     } finally {
@@ -199,10 +222,29 @@ export const NewEventForm: React.FC<NewEventFormProps> = ({ onBack, onSuccess })
           <ArrowLeft size={18} />
         </button>
         <div>
-          <h1 className="text-xl font-bold text-slate-900">New Event Pre-Approval Application</h1>
-          <p className="text-xs text-slate-500">
-            Submit event details for official staff & HOD verification
-          </p>
+          {initialData ? (
+            <>
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-800 uppercase tracking-wider">
+                  Draft Mode
+                </span>
+                <span className="font-mono text-xs font-bold text-slate-500">
+                  {initialData.applicationNumber}
+                </span>
+              </div>
+              <h1 className="text-xl font-bold text-slate-900">Edit Saved Draft Application</h1>
+              <p className="text-xs text-slate-500">
+                Continue editing your event information and submit for official staff & HOD verification
+              </p>
+            </>
+          ) : (
+            <>
+              <h1 className="text-xl font-bold text-slate-900">New Event Pre-Approval Application</h1>
+              <p className="text-xs text-slate-500">
+                Submit event details for official staff & HOD verification
+              </p>
+            </>
+          )}
         </div>
       </div>
 
@@ -601,7 +643,7 @@ export const NewEventForm: React.FC<NewEventFormProps> = ({ onBack, onSuccess })
             leftIcon={<Save size={16} />}
             className="w-full sm:w-auto"
           >
-            Save as Draft
+            {initialData ? 'Save Changes to Draft' : 'Save as Draft'}
           </Button>
           <Button
             type="submit"
@@ -610,7 +652,7 @@ export const NewEventForm: React.FC<NewEventFormProps> = ({ onBack, onSuccess })
             leftIcon={<CheckCircle2 size={16} />}
             className="w-full sm:w-auto font-bold"
           >
-            Submit for Faculty Verification
+            {initialData ? 'Submit Draft for 50% Pre-Approval' : 'Submit for Faculty Verification'}
           </Button>
         </div>
       </form>

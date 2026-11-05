@@ -51,6 +51,7 @@ export interface UserProfile {
   isFirstLogin: boolean;
   hasSetPassword: boolean;
   createdAt: string;
+  updatedAt?: string;
   lastLoginAt?: string;
 }
 
@@ -74,6 +75,7 @@ export interface Student {
   hasSetPassword: boolean;
   uid?: string;
   createdAt: string;
+  updatedAt?: string;
   lastLoginAt?: string;
   eventCount: number;
 }

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { EventApplication } from '../../types';
-import { getApplicationsForStudent, getApprovalLogs } from '../../services/firebase/firestoreService';
+import { getApplicationsForStudent, getApprovalLogs, deleteApplication } from '../../services/firebase/firestoreService';
 import { Badge } from '../../components/common/Badge';
 import { Button } from '../../components/common/Button';
 import { ProgressBar } from '../../components/common/ProgressBar';
@@ -12,7 +12,7 @@ import {
   FileText,
   Calendar,
   MapPin,
-  ExternalLink,
+  Globe,
   UploadCloud,
   CheckCircle2,
   Clock,
@@ -20,14 +20,17 @@ import {
   AlertCircle,
   Plus,
   Pencil,
+  Trash2,
 } from 'lucide-react';
 
 interface StudentApplicationsViewProps {
   onNewEvent: () => void;
+  onEditDraft?: (app: EventApplication) => void;
 }
 
 export const StudentApplicationsView: React.FC<StudentApplicationsViewProps> = ({
   onNewEvent,
+  onEditDraft,
 }) => {
   const { currentUser, studentData } = useAuth();
   if (!studentData) return null;
@@ -45,8 +48,22 @@ export const StudentApplicationsView: React.FC<StudentApplicationsViewProps> = (
     setApplications(getApplicationsForStudent(studentData.registrationNumber));
   };
 
+  const draftCount = applications.filter(a => a.status === 'DRAFT').length;
+
+  const handleDeleteDraft = async (id: string) => {
+    if (window.confirm('Are you sure you want to discard this draft application?')) {
+      try {
+        await deleteApplication(id);
+        reload();
+      } catch (err: any) {
+        alert(err.message || 'Failed to delete draft.');
+      }
+    }
+  };
+
   const filteredApps = applications.filter((app) => {
     if (filter === 'ALL') return true;
+    if (filter === 'DRAFT') return app.status === 'DRAFT';
     if (filter === 'PRE_APPROVED') return app.status === 'PRE_APPROVED';
     if (filter === 'COMPLETED') return app.status === 'COMPLETED';
     if (filter === 'PENDING')
@@ -75,24 +92,35 @@ export const StudentApplicationsView: React.FC<StudentApplicationsViewProps> = (
       </div>
 
       {/* Filter Tabs */}
-      <div className="flex bg-slate-100 p-1 rounded-2xl max-w-lg overflow-x-auto">
-        {['ALL', 'PRE_APPROVED', 'COMPLETED', 'PENDING', 'REJECTED'].map((f) => (
+      <div className="flex bg-slate-100 p-1 rounded-2xl max-w-2xl overflow-x-auto gap-1">
+        {['ALL', 'DRAFT', 'PRE_APPROVED', 'COMPLETED', 'PENDING', 'REJECTED'].map((f) => (
           <button
             key={f}
             onClick={() => setFilter(f)}
-            className={`flex-1 py-2 px-3 text-xs font-bold rounded-xl whitespace-nowrap cursor-pointer transition-all ${
+            className={`py-2 px-3 text-xs font-bold rounded-xl whitespace-nowrap cursor-pointer transition-all flex items-center gap-1.5 ${
               filter === f ? 'bg-white text-slate-900 shadow-xs' : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            {f === 'ALL'
-              ? 'All'
-              : f === 'PRE_APPROVED'
-              ? 'Pre-Approved (50%)'
-              : f === 'COMPLETED'
-              ? 'Completed (100%)'
-              : f === 'PENDING'
-              ? 'Pending'
-              : 'Rejected'}
+            <span>
+              {f === 'ALL'
+                ? 'All'
+                : f === 'DRAFT'
+                ? 'Drafts'
+                : f === 'PRE_APPROVED'
+                ? 'Pre-Approved (50%)'
+                : f === 'COMPLETED'
+                ? 'Completed (100%)'
+                : f === 'PENDING'
+                ? 'Pending'
+                : 'Rejected'}
+            </span>
+            {f === 'DRAFT' && draftCount > 0 && (
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-extrabold ${
+                filter === 'DRAFT' ? 'bg-amber-100 text-amber-800' : 'bg-slate-200 text-slate-700'
+              }`}>
+                {draftCount}
+              </span>
+            )}
           </button>
         ))}
       </div>
@@ -156,6 +184,41 @@ export const StudentApplicationsView: React.FC<StudentApplicationsViewProps> = (
                 </div>
               )}
 
+              {/* Saved Draft Notification Banner */}
+              {app.status === 'DRAFT' && (
+                <div className="p-4 bg-amber-50/90 border border-amber-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs text-amber-950">
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500 shrink-0 animate-pulse" />
+                    <div>
+                      <span className="font-bold block text-sm">Saved Draft Application</span>
+                      <span className="text-[11px] text-amber-800">
+                        This event is saved in your private drafts. It is NOT sent to staff or admin until you click submit.
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Button
+                      type="button"
+                      variant="primary"
+                      size="sm"
+                      onClick={() => onEditDraft && onEditDraft(app)}
+                      className="bg-amber-600 hover:bg-amber-700 text-white font-bold cursor-pointer shadow-xs"
+                      leftIcon={<Pencil size={14} />}
+                    >
+                      Open Draft & Continue Editing
+                    </Button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteDraft(app.id)}
+                      className="p-2 text-rose-600 hover:bg-rose-100 rounded-xl transition-colors cursor-pointer"
+                      title="Discard Draft"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 gap-2 rounded-2xl border border-slate-200 bg-slate-50 p-3 text-xs sm:grid-cols-3">
                 <p>
                   <span className="block font-bold uppercase tracking-wide text-slate-400">Submitted</span>
@@ -215,6 +278,19 @@ export const StudentApplicationsView: React.FC<StudentApplicationsViewProps> = (
                 </button>
 
                 <div className="flex items-center gap-2">
+                  {/* If Draft, show Open Draft button */}
+                  {app.status === 'DRAFT' && (
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={() => onEditDraft && onEditDraft(app)}
+                      className="bg-amber-600 hover:bg-amber-700 text-white font-bold cursor-pointer"
+                      leftIcon={<Pencil size={14} />}
+                    >
+                      Open & Edit Draft
+                    </Button>
+                  )}
+
                   {/* If Pre-approved, show post-event submission button */}
                   {app.status === 'PRE_APPROVED' && (
                     <Button

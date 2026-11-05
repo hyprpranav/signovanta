@@ -10,6 +10,7 @@ import { StudentDashboard } from './pages/student/StudentDashboard';
 import { NewEventForm } from './pages/student/NewEventForm';
 import { StudentProfileView } from './pages/student/StudentProfileView';
 import { StudentApplicationsView } from './pages/student/StudentApplicationsView';
+import { StudentSettingsView } from './pages/student/StudentSettingsView';
 import { StaffDashboard } from './pages/staff/StaffDashboard';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
 import { FirebaseSetupGuideModal } from './components/common/FirebaseSetupGuideModal';
@@ -31,6 +32,7 @@ const MainAppLayout: React.FC = () => {
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [showFirebaseGuide, setShowFirebaseGuide] = useState(false);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [editingDraft, setEditingDraft] = useState<EventApplication | null>(null);
   const [celebration, setCelebration] = useState<{
     id: string;
     title: string;
@@ -229,28 +231,46 @@ const MainAppLayout: React.FC = () => {
             <>
               {selectedTab === 'dashboard' && (
                 <StudentDashboard
-                  onNewEvent={() => setCurrentTab('new_event')}
+                  onNewEvent={() => {
+                    setEditingDraft(null);
+                    setCurrentTab('new_event');
+                  }}
                   onViewApplications={() => setCurrentTab('applications')}
                   onSelectApplication={() => setCurrentTab('applications')}
                   onOpenTeamFormation={() => setCurrentTab('teams')}
+                  onEditDraft={(draft) => {
+                    setEditingDraft(draft);
+                    setCurrentTab('new_event');
+                  }}
                 />
               )}
               {selectedTab === 'new_event' && (
                 <NewEventForm
-                  onBack={() => setCurrentTab('dashboard')}
-                  onSuccess={(app) => setCurrentTab('applications')}
+                  initialData={editingDraft}
+                  onBack={() => {
+                    setEditingDraft(null);
+                    setCurrentTab('dashboard');
+                  }}
+                  onSuccess={(app) => {
+                    setEditingDraft(null);
+                    setCurrentTab('applications');
+                  }}
                 />
               )}
               {selectedTab === 'my_profile' && <StudentProfileView />}
               {(selectedTab === 'applications' || selectedTab === 'history') && (
-                <StudentApplicationsView onNewEvent={() => setCurrentTab('new_event')} />
+                <StudentApplicationsView
+                  onNewEvent={() => {
+                    setEditingDraft(null);
+                    setCurrentTab('new_event');
+                  }}
+                  onEditDraft={(draft) => {
+                    setEditingDraft(draft);
+                    setCurrentTab('new_event');
+                  }}
+                />
               )}
-              {selectedTab === 'settings' && (
-                <div className="bg-white rounded-3xl border border-slate-200 p-6 space-y-4 max-w-md">
-                  <h2 className="text-base font-bold text-slate-900">Portal Settings</h2>
-                  <p className="text-xs text-slate-500">Manage your profile and application preferences.</p>
-                </div>
-              )}
+              {selectedTab === 'settings' && <StudentSettingsView />}
             </>
           )}
 

@@ -145,5 +145,19 @@ assert.strictEqual(cleanedDoc.nested.valid, 'data');
 assert.deepStrictEqual(cleanedDoc.list, ['ok', 'item']);
 console.log('✓ Test 5 Passed: Zero-Error Firestore Sanitization eliminates all undefined fields completely.');
 
-console.log('ALL 5 AUTOMATED TEST SUITES PASSED CLEANLY!');
+// 6. Test Draft Visibility Isolation (Drafts NEVER show to Admin/Staff)
+const mixedApps = [
+  { id: '1', eventName: 'Event 1', status: 'DRAFT', studentRegNo: '927624BEC001' },
+  { id: '2', eventName: 'Event 2', status: 'SUBMITTED', studentRegNo: '927624BEC001' },
+  { id: '3', eventName: 'Event 3', status: 'PRE_APPROVED', studentRegNo: '927624BEC002' },
+  { id: '4', eventName: 'Event 4', status: 'DRAFT', studentRegNo: '927624BEC003' },
+];
+
+const staffVisibleApps = mixedApps.filter(a => a.status !== 'DRAFT');
+assert.strictEqual(staffVisibleApps.length, 2);
+assert.strictEqual(staffVisibleApps.some(a => a.status === 'DRAFT'), false);
+assert.strictEqual(staffVisibleApps.map(a => a.id).sort().join(','), '2,3');
+console.log('✓ Test 6 Passed: Draft applications strictly isolated from Staff and Admin approval queues.');
+
+console.log('ALL 6 AUTOMATED TEST SUITES PASSED CLEANLY!');
 

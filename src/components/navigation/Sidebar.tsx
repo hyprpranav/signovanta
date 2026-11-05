@@ -91,7 +91,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'history', label: 'Event History', icon: History },
     { id: 'issues', label: 'Facing Issues?', icon: AlertCircle },
     { id: 'settings', label: 'Settings', icon: Settings },
-    { id: 'delete_things', label: 'Delete Things', icon: Trash2 },
   ];
 
   // Staff Nav Items (Shared across STAFF, HOD, AHOD)

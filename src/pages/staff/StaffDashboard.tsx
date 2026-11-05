@@ -45,7 +45,9 @@ interface StaffDashboardProps {
 export const StaffDashboard: React.FC<StaffDashboardProps> = ({ activeTab: requestedTab }) => {
   const { currentUser, staffData } = useAuth();
   const [activeTab, setActiveTab] = useState<'approvals' | 'certificates' | 'announcements' | 'exports' | 'analytics' | 'submissions' | 'delete_things'>('approvals');
-  const [applications, setApplications] = useState<EventApplication[]>(() => getAllApplications());
+  const [applications, setApplications] = useState<EventApplication[]>(() =>
+    getAllApplications().filter(a => a.status !== 'DRAFT')
+  );
   const [students, setStudents] = useState(() => getLocalStudents());
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [announcementTitle, setAnnouncementTitle] = useState('');
@@ -68,7 +70,7 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({ activeTab: reque
   useEffect(() => {
     void Promise.all([syncApplicationsFromFirebase(), syncStudentsFromFirebase()])
       .then(([remoteApplications, remoteStudents]) => {
-        setApplications(remoteApplications);
+        setApplications(remoteApplications.filter(a => a.status !== 'DRAFT'));
         setStudents(remoteStudents);
       });
   }, []);
@@ -101,7 +103,7 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({ activeTab: reque
   const completedList = applications.filter(a => a.status === 'COMPLETED');
 
   const reloadApps = () => {
-    setApplications(getAllApplications());
+    setApplications(getAllApplications().filter(a => a.status !== 'DRAFT'));
   };
 
   const handleActionConfirm = () => {

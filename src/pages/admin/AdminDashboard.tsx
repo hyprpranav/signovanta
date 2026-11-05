@@ -81,7 +81,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab: reque
   const [students, setStudents] = useState<Student[]>(() => getLocalStudents());
   const [staffList, setStaffList] = useState<Staff[]>(() => getLocalStaff());
   const [studentRequests, setStudentRequests] = useState<StudentRegistrationRequest[]>(() => getStudentRegistrationRequests());
-  const [applications, setApplications] = useState<EventApplication[]>(() => getAllApplications());
+  const [applications, setApplications] = useState<EventApplication[]>(() =>
+    getAllApplications().filter(a => a.status !== 'DRAFT')
+  );
   const [categories, setCategories] = useState<EventCategory[]>(() => getCategories());
   const [sections, setSections] = useState<AcademicSection[]>(() => getAcademicSections());
 
@@ -95,7 +97,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab: reque
   useEffect(() => {
     void Promise.all([syncApplicationsFromFirebase(), syncStudentsFromFirebase(), syncStaffFromFirebase()])
       .then(([remoteApplications, remoteStudents, remoteStaff]) => {
-        setApplications(remoteApplications);
+        setApplications(remoteApplications.filter(a => a.status !== 'DRAFT'));
         setStudents(remoteStudents);
         setStaffList(remoteStaff);
       });
@@ -134,7 +136,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab: reque
     setStudents(getLocalStudents());
     setStaffList(getLocalStaff());
     setStudentRequests(getStudentRegistrationRequests());
-    setApplications(getAllApplications());
+    setApplications(getAllApplications().filter(a => a.status !== 'DRAFT'));
     setCategories(getCategories());
     setSections(getAcademicSections());
   };

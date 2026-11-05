@@ -33,6 +33,7 @@ export const SubmissionsPanel: React.FC<SubmissionsPanelProps> = ({ applications
   const [editing, setEditing] = useState<EventApplication | null>(null);
   const categories = Array.from(new Set(applications.map(app => app.eventCategory).filter(Boolean))).sort();
   const filtered = useMemo(() => applications.filter(app => {
+    if (app.status === 'DRAFT') return false; // Drafts are strictly private to student
     const stageMatch = stage === 'ALL' ||
       (stage === 'PENDING' && ['SUBMITTED', 'UNDER_REVIEW', 'CORRECTION_REQUIRED'].includes(app.status)) ||
       (stage === 'FIFTY' && ['PRE_APPROVED', 'AWAITING_POST_EVENT', 'CERTIFICATE_SUBMITTED', 'FINAL_VERIFICATION'].includes(app.status)) ||

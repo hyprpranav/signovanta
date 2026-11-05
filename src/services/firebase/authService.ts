@@ -575,6 +575,60 @@ export async function completeFirstLogin(
 }
 
 /**
+ * Change Student Password from Settings
+ * Verifies current password, validates new password, updates in Local Storage and Firebase
+ */
+export async function changeStudentPassword(
+  regNo: string,
+  currentPasswordInput: string,
+  newPasswordInput: string
+): Promise<void> {
+  const normReg = normalizeRegNo(regNo);
+  const students = getLocalStudents();
+  const idx = students.findIndex(s => normalizeRegNo(s.registrationNumber) === normReg);
+  if (idx === -1) {
+    throw new Error('Student record not found in college database.');
+  }
+
+  const student = students[idx];
+  const savedPassword = localStorage.getItem(`pwd_${normReg}`);
+  const expectedCurrent = savedPassword || normReg;
+
+  if (currentPasswordInput !== expectedCurrent) {
+    throw new Error('Incorrect current password. Please re-check your existing password.');
+  }
+
+  if (!newPasswordInput || newPasswordInput.trim().length < 6) {
+    throw new Error('New password must be at least 6 characters.');
+  }
+
+  if (newPasswordInput === currentPasswordInput) {
+    throw new Error('New password must be different from your current password.');
+  }
+
+  // 1. Try Firebase Auth update if active
+  if (isFirebaseConfigured() && auth) {
+    try {
+      const email = regNoToEmail(normReg);
+      if (auth.currentUser && auth.currentUser.email === email) {
+        await fbUpdatePassword(auth.currentUser, newPasswordInput);
+      } else {
+        const cred = await signInWithEmailAndPassword(auth, email, expectedCurrent);
+        await fbUpdatePassword(cred.user, newPasswordInput);
+      }
+    } catch (fbErr) {
+      console.warn('[AuthService] Firebase Auth password update warning:', fbErr);
+    }
+  }
+
+  // 2. Update Local Storage & Student record
+  localStorage.setItem(`pwd_${normReg}`, newPasswordInput);
+  student.hasSetPassword = true;
+  students[idx] = { ...student, hasSetPassword: true, updatedAt: new Date().toISOString() };
+  saveLocalStudents(students);
+}
+
+/**
  * STAFF LOGIN
  */
 export async function staffLogin(email: string, passwordInput: string): Promise<{

@@ -23,6 +23,7 @@ interface StudentDashboardProps {
   onViewApplications: () => void;
   onSelectApplication: (app: EventApplication) => void;
   onOpenTeamFormation: () => void;
+  onEditDraft?: (app: EventApplication) => void;
 }
 
 export const StudentDashboard: React.FC<StudentDashboardProps> = ({
@@ -30,14 +31,16 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   onViewApplications,
   onSelectApplication,
   onOpenTeamFormation,
+  onEditDraft,
 }) => {
   const { currentUser, studentData } = useAuth();
   if (!currentUser || !studentData) return null;
 
   const applications = getApplicationsForStudent(studentData.registrationNumber);
+  const drafts = applications.filter(a => a.status === 'DRAFT');
 
   // Statistics calculation
-  const totalEvents = applications.length;
+  const totalEvents = applications.filter(a => a.status !== 'DRAFT').length;
   const pendingEvents = applications.filter(a =>
     ['SUBMITTED', 'UNDER_REVIEW', 'CORRECTION_REQUIRED', 'CERTIFICATE_SUBMITTED', 'FINAL_VERIFICATION'].includes(a.status)
   ).length;
@@ -87,6 +90,43 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
         {/* Subtle background glow */}
         <div className="absolute right-0 top-0 -mr-16 -mt-16 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
       </div>
+
+      {/* Saved Drafts Reminder Banner */}
+      {drafts.length > 0 && (
+        <div className="p-4 bg-gradient-to-r from-amber-50 to-orange-50 border border-amber-200/90 rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-xs">
+          <div className="flex items-center gap-3">
+            <span className="p-2.5 bg-amber-100 text-amber-800 rounded-2xl shrink-0 font-bold">
+              📝
+            </span>
+            <div>
+              <h3 className="text-sm font-bold text-amber-950">
+                You have {drafts.length} saved draft application{drafts.length > 1 ? 's' : ''}
+              </h3>
+              <p className="text-xs text-amber-800">
+                Drafts are completely private to you. They will not be sent to staff or admin until submitted.
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => onEditDraft && onEditDraft(drafts[0])}
+              className="bg-amber-600 hover:bg-amber-700 text-white font-bold cursor-pointer"
+            >
+              Resume Draft: {drafts[0].eventName || 'Untitled Event'}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onViewApplications}
+              className="border-amber-300 text-amber-900 hover:bg-amber-100"
+            >
+              View Drafts ({drafts.length})
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Dashboard Statistics Grid */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
