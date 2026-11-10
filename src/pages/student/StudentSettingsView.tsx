@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
-import { changeStudentPassword, getLocalStudents, saveLocalStudents } from '../../services/firebase/authService';
+import { changeStudentPassword, getLocalStudents, saveLocalStudents, updateStudentProfile } from '../../services/firebase/authService';
 import { uploadToCloudinary } from '../../services/cloudinary/cloudinaryService';
 import { Button } from '../../components/common/Button';
 import {
@@ -60,24 +60,22 @@ export const StudentSettingsView: React.FC = () => {
       });
       setProfilePhotoUrl(res.url);
 
-      // Persist in local storage and auth context
-      const list = getLocalStudents();
-      const idx = list.findIndex((s) => s.id === studentData.id);
-      if (idx !== -1) {
-        list[idx].profilePhotoUrl = res.url;
-        list[idx].profilePhotoPublicId = res.publicId;
-        saveLocalStudents(list);
-        updateCurrentStudentProfile({
-          profilePhotoUrl: res.url,
-          profilePhotoPublicId: res.publicId,
-        });
-        window.dispatchEvent(
-          new CustomEvent('signovanta:student-updated', {
-            detail: { registrationNumber: studentData.registrationNumber },
-          })
-        );
-        window.dispatchEvent(new Event('signovanta:data-updated'));
-      }
+      // Persist in local storage, auth context, and remote Firestore
+      void updateStudentProfile(studentData.id, {
+        profilePhotoUrl: res.url,
+        profilePhotoPublicId: res.publicId,
+      });
+
+      updateCurrentStudentProfile({
+        profilePhotoUrl: res.url,
+        profilePhotoPublicId: res.publicId,
+      });
+      window.dispatchEvent(
+        new CustomEvent('signovanta:student-updated', {
+          detail: { registrationNumber: studentData.registrationNumber },
+        })
+      );
+      window.dispatchEvent(new Event('signovanta:data-updated'));
       setProfileSuccessMsg('✓ Profile photo updated successfully!');
       setTimeout(() => setProfileSuccessMsg(null), 3500);
     } catch (err: any) {
@@ -88,38 +86,35 @@ export const StudentSettingsView: React.FC = () => {
   };
 
   // Handle Save Profile
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSavingProfile(true);
     setProfileErrorMsg(null);
     setProfileSuccessMsg(null);
 
     try {
-      const list = getLocalStudents();
-      const idx = list.findIndex((s) => s.id === studentData.id);
-      if (idx !== -1) {
-        list[idx].mobile = mobile.trim();
-        list[idx].fullName = fullName.trim();
-        list[idx].dateOfBirth = dateOfBirth;
-        list[idx].profilePhotoUrl = profilePhotoUrl;
-        saveLocalStudents(list);
+      await updateStudentProfile(studentData.id, {
+        mobile: mobile.trim(),
+        fullName: fullName.trim(),
+        dateOfBirth,
+        profilePhotoUrl,
+      });
 
-        updateCurrentStudentProfile({
-          mobile: mobile.trim(),
-          fullName: fullName.trim(),
-          dateOfBirth,
-          profilePhotoUrl,
-        });
+      updateCurrentStudentProfile({
+        mobile: mobile.trim(),
+        fullName: fullName.trim(),
+        dateOfBirth,
+        profilePhotoUrl,
+      });
 
-        setProfileSuccessMsg('✓ Profile details saved successfully!');
-        window.dispatchEvent(
-          new CustomEvent('signovanta:student-updated', {
-            detail: { registrationNumber: studentData.registrationNumber },
-          })
-        );
-        window.dispatchEvent(new Event('signovanta:data-updated'));
-        setTimeout(() => setProfileSuccessMsg(null), 3500);
-      }
+      setProfileSuccessMsg('✓ Profile details saved successfully in Firebase!');
+      window.dispatchEvent(
+        new CustomEvent('signovanta:student-updated', {
+          detail: { registrationNumber: studentData.registrationNumber },
+        })
+      );
+      window.dispatchEvent(new Event('signovanta:data-updated'));
+      setTimeout(() => setProfileSuccessMsg(null), 3500);
     } catch (err: any) {
       setProfileErrorMsg(err.message || 'Failed to update profile.');
     } finally {

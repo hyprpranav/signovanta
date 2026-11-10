@@ -17,6 +17,7 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 import { auth, db, isFirebaseConfigured } from './firebaseConfig';
+import { sanitizeForFirestore } from './firestoreService';
 import { UserProfile, Student, Staff, UserRole, StudentRegistrationRequest } from '../../types';
 import { SEED_STUDENTS } from '../../data/seedStudents';
 
@@ -75,16 +76,21 @@ export function saveLocalStudents(students: Student[]): void {
 
 export async function updateStudentProfile(
   studentId: string,
-  updates: Pick<Student, 'fullName' | 'mobile' | 'dateOfBirth' | 'profilePhotoUrl' | 'profilePhotoPublicId'>
+  updates: Partial<Student>
 ): Promise<Student> {
   const students = getLocalStudents();
   const index = students.findIndex(student => student.id === studentId);
   if (index === -1) throw new Error('Student record not found.');
 
+  const updatedStudent = { ...students[index], ...updates, updatedAt: new Date().toISOString() };
+  students[index] = updatedStudent;
+  saveLocalStudents(students);
+
   if (isFirebaseConfigured() && db) {
     try {
+      const cleanUpdates = sanitizeForFirestore(updates);
       await updateDoc(doc(db, 'students', studentId), {
-        ...updates,
+        ...cleanUpdates,
         updatedAt: serverTimestamp(),
       });
     } catch (error) {
@@ -92,9 +98,6 @@ export async function updateStudentProfile(
     }
   }
 
-  const updatedStudent = { ...students[index], ...updates };
-  students[index] = updatedStudent;
-  saveLocalStudents(students);
   return updatedStudent;
 }
 
@@ -174,6 +177,29 @@ export function saveStudentRegistrationRequests(requests: StudentRegistrationReq
   }
 }
 
+export async function syncStudentRegistrationRequestsFromFirebase(): Promise<StudentRegistrationRequest[]> {
+  if (!isFirebaseConfigured() || !db) return getStudentRegistrationRequests();
+  try {
+    const snap = await getDocs(collection(db, 'studentRegistrationRequests'));
+    if (!snap.empty) {
+      const remote = snap.docs.map(d => ({ id: d.id, ...d.data() })) as StudentRegistrationRequest[];
+      saveStudentRegistrationRequests(remote);
+      return remote;
+    }
+  } catch {}
+
+  try {
+    const snap = await getDoc(doc(db, 'systemSettings', 'student_requests'));
+    if (snap.exists() && snap.data().requests) {
+      const remote = snap.data().requests as StudentRegistrationRequest[];
+      saveStudentRegistrationRequests(remote);
+      return remote;
+    }
+  } catch {}
+
+  return getStudentRegistrationRequests();
+}
+
 export async function submitStudentRegistrationRequest(data: {
   registrationNumber: string;
   fullName: string;
@@ -209,10 +235,31 @@ export async function submitStudentRegistrationRequest(data: {
 
   requests.unshift(newRequest);
   saveStudentRegistrationRequests(requests);
+
+  if (isFirebaseConfigured() && db) {
+    const clean = sanitizeForFirestore(newRequest);
+    try {
+      await setDoc(doc(db, 'studentRegistrationRequests', newRequest.id), {
+        ...clean,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (err) {
+      console.warn('[SIGNOVANTA] Direct studentRegistrationRequests save notice:', err);
+    }
+    try {
+      const snap = await getDoc(doc(db, 'systemSettings', 'student_requests'));
+      const list: StudentRegistrationRequest[] = snap.exists() ? snap.data().requests || [] : [];
+      list.unshift(newRequest);
+      await setDoc(doc(db, 'systemSettings', 'student_requests'), { requests: list, updatedAt: serverTimestamp() }, { merge: true });
+    } catch (err) {
+      console.warn('[SIGNOVANTA] systemSettings student_requests backup notice:', err);
+    }
+  }
+
   return newRequest;
 }
 
-export function approveStudentRegistrationRequest(requestId: string): Student {
+export async function approveStudentRegistrationRequest(requestId: string): Promise<Student> {
   const requests = getStudentRegistrationRequests();
   const req = requests.find(r => r.id === requestId);
   if (!req) throw new Error('Registration request not found.');
@@ -238,18 +285,70 @@ export function approveStudentRegistrationRequest(requestId: string): Student {
     eventCount: 0,
   };
 
-  students.push(newStudent);
+  const existingIdx = students.findIndex(s => normalizeRegNo(s.registrationNumber) === normalizeRegNo(newStudent.registrationNumber));
+  if (existingIdx !== -1) {
+    students[existingIdx] = { ...students[existingIdx], ...newStudent };
+  } else {
+    students.push(newStudent);
+  }
   saveLocalStudents(students);
+
+  if (isFirebaseConfigured() && db) {
+    try {
+      await updateDoc(doc(db, 'studentRegistrationRequests', requestId), {
+        status: 'APPROVED',
+        updatedAt: serverTimestamp(),
+      });
+    } catch {}
+    try {
+      await setDoc(doc(db, 'students', newStudent.id), {
+        ...sanitizeForFirestore(newStudent),
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+    } catch {}
+    try {
+      const snap = await getDoc(doc(db, 'systemSettings', 'student_requests'));
+      if (snap.exists()) {
+        const list: StudentRegistrationRequest[] = snap.data().requests || [];
+        const idx = list.findIndex(r => r.id === requestId);
+        if (idx !== -1) {
+          list[idx].status = 'APPROVED';
+          await setDoc(doc(db, 'systemSettings', 'student_requests'), { requests: list, updatedAt: serverTimestamp() }, { merge: true });
+        }
+      }
+    } catch {}
+  }
+
   return newStudent;
 }
 
-export function rejectStudentRegistrationRequest(requestId: string): void {
+export async function rejectStudentRegistrationRequest(requestId: string): Promise<void> {
   const requests = getStudentRegistrationRequests();
   const req = requests.find(r => r.id === requestId);
   if (!req) throw new Error('Registration request not found.');
 
   req.status = 'REJECTED';
   saveStudentRegistrationRequests(requests);
+
+  if (isFirebaseConfigured() && db) {
+    try {
+      await updateDoc(doc(db, 'studentRegistrationRequests', requestId), {
+        status: 'REJECTED',
+        updatedAt: serverTimestamp(),
+      });
+    } catch {}
+    try {
+      const snap = await getDoc(doc(db, 'systemSettings', 'student_requests'));
+      if (snap.exists()) {
+        const list: StudentRegistrationRequest[] = snap.data().requests || [];
+        const idx = list.findIndex(r => r.id === requestId);
+        if (idx !== -1) {
+          list[idx].status = 'REJECTED';
+          await setDoc(doc(db, 'systemSettings', 'student_requests'), { requests: list, updatedAt: serverTimestamp() }, { merge: true });
+        }
+      }
+    } catch {}
+  }
 }
 
 /**
@@ -657,25 +756,52 @@ export async function staffLogin(email: string, passwordInput: string): Promise<
     throw new Error('Your staff registration request was rejected. Please contact administration.');
   }
 
-  // Check local password if set, else accept password
-  const savedPassword = localStorage.getItem(`pwd_staff_${staff.staffId}`);
-  if (savedPassword && passwordInput !== savedPassword) {
-    throw new Error('Invalid credentials.');
+  let authUid = staff.uid;
+  if (isFirebaseConfigured() && auth) {
+    try {
+      const cred = await signInWithEmailAndPassword(auth, normEmail, passwordInput);
+      authUid = cred.user.uid;
+    } catch {
+      // Fallback check local password
+      const savedPassword = localStorage.getItem(`pwd_staff_${staff.staffId}`);
+      if (savedPassword && passwordInput !== savedPassword) {
+        throw new Error('Invalid credentials.');
+      }
+    }
+  } else {
+    const savedPassword = localStorage.getItem(`pwd_staff_${staff.staffId}`);
+    if (savedPassword && passwordInput !== savedPassword) {
+      throw new Error('Invalid credentials.');
+    }
   }
 
+  // Update lastLoginAt in Firestore
+  if (isFirebaseConfigured() && db) {
+    try {
+      await updateDoc(doc(db, 'staff', staff.id), {
+        lastLoginAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+    } catch {}
+  }
+
+  const now = new Date().toISOString();
+  staff.lastLoginAt = now;
+
   const userProfile: UserProfile = {
-    uid: staff.uid || `uid_${staff.staffId}`,
+    uid: authUid || staff.uid || `uid_${staff.staffId}`,
     email: staff.email,
     displayName: staff.fullName,
     role: staff.assignedRole, // Strictly the Master-Admin-assigned role (STAFF, HOD, AHOD)
     staffId: staff.staffId,
     department: staff.department,
     designation: staff.designation,
+    profilePhotoUrl: staff.profilePhotoUrl,
     status: 'ACTIVE',
     isFirstLogin: false,
     hasSetPassword: true,
     createdAt: staff.createdAt,
-    lastLoginAt: new Date().toISOString(),
+    lastLoginAt: now,
   };
 
   return { user: userProfile, staff };
@@ -704,6 +830,18 @@ export async function registerStaffRequest(data: {
     throw new Error('A staff account with this Staff ID or email already exists.');
   }
 
+  let firebaseUid = '';
+  if (isFirebaseConfigured() && auth && data.password) {
+    try {
+      const cred = await createUserWithEmailAndPassword(auth, data.email.trim().toLowerCase(), data.password);
+      firebaseUid = cred.user.uid;
+    } catch (authErr: any) {
+      if (authErr.code !== 'auth/email-already-in-use') {
+        console.warn('[AuthService] Staff Auth user creation notice:', authErr);
+      }
+    }
+  }
+
   const newStaff: Staff = {
     id: `staff_${Date.now()}`,
     staffId: data.staffId.toUpperCase().trim(),
@@ -717,6 +855,7 @@ export async function registerStaffRequest(data: {
     approvalStatus: 'PENDING',
     supportingInfo: data.supportingInfo,
     isSuspended: false,
+    uid: firebaseUid || undefined,
     createdAt: new Date().toISOString(),
   };
 
@@ -727,7 +866,135 @@ export async function registerStaffRequest(data: {
     localStorage.setItem(`pwd_staff_${newStaff.staffId}`, data.password);
   }
 
+  // Firestore live persistence
+  if (isFirebaseConfigured() && db) {
+    const clean = sanitizeForFirestore(newStaff);
+    try {
+      await setDoc(doc(db, 'staff', newStaff.id), {
+        ...clean,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (err) {
+      console.warn('[SIGNOVANTA] Direct staff save notice:', err);
+    }
+    try {
+      const snap = await getDoc(doc(db, 'systemSettings', 'staff_members'));
+      const list: Staff[] = snap.exists() ? snap.data().staff || [] : [];
+      list.push(newStaff);
+      await setDoc(doc(db, 'systemSettings', 'staff_members'), { staff: list, updatedAt: serverTimestamp() }, { merge: true });
+    } catch {}
+  }
+
   return newStaff;
+}
+
+/**
+ * Update Faculty Profile
+ */
+export async function updateStaffProfile(
+  staffId: string,
+  updates: Partial<Staff>
+): Promise<Staff> {
+  const staffList = getLocalStaff();
+  const index = staffList.findIndex(s => s.staffId === staffId || s.id === staffId);
+  if (index === -1) throw new Error('Staff record not found.');
+
+  const updated = { ...staffList[index], ...updates, updatedAt: new Date().toISOString() };
+  staffList[index] = updated;
+  saveLocalStaff(staffList);
+
+  if (isFirebaseConfigured() && db) {
+    try {
+      const cleanUpdates = sanitizeForFirestore(updates);
+      await updateDoc(doc(db, 'staff', staffList[index].id), {
+        ...cleanUpdates,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (error) {
+      console.warn('[AuthService] Notice: Could not sync staff profile to Firebase:', error);
+    }
+  }
+
+  return updated;
+}
+
+/**
+ * Change Staff Password
+ */
+export async function changeStaffPassword(
+  staffId: string,
+  email: string,
+  currentPasswordInput: string,
+  newPasswordInput: string
+): Promise<void> {
+  const staffList = getLocalStaff();
+  const staff = staffList.find(s => s.staffId === staffId || s.id === staffId);
+  if (!staff) throw new Error('Faculty record not found.');
+
+  const savedPwd = localStorage.getItem(`pwd_staff_${staff.staffId}`);
+  if (savedPwd && currentPasswordInput !== savedPwd) {
+    throw new Error('Current password is incorrect.');
+  }
+
+  if (newPasswordInput.length < 6) {
+    throw new Error('New password must be at least 6 characters.');
+  }
+
+  if (isFirebaseConfigured() && auth) {
+    try {
+      if (auth.currentUser && auth.currentUser.email === email) {
+        await fbUpdatePassword(auth.currentUser, newPasswordInput);
+      } else {
+        const cred = await signInWithEmailAndPassword(auth, email, currentPasswordInput);
+        await fbUpdatePassword(cred.user, newPasswordInput);
+      }
+    } catch (err) {
+      console.warn('[AuthService] Firebase Auth staff password update notice:', err);
+    }
+  }
+
+  localStorage.setItem(`pwd_staff_${staff.staffId}`, newPasswordInput);
+}
+
+/**
+ * Update Master Admin Profile (Boomika)
+ */
+export async function updateMasterAdminProfile(profileData: {
+  displayName?: string;
+  email?: string;
+  mobile?: string;
+  dateOfBirth?: string;
+  department?: string;
+  designation?: string;
+  profilePhotoUrl?: string;
+}): Promise<void> {
+  if (profileData.displayName) localStorage.setItem('master_admin_name', profileData.displayName);
+  if (profileData.email) localStorage.setItem('master_admin_email', profileData.email);
+  if (profileData.mobile) localStorage.setItem('master_admin_mobile', profileData.mobile);
+  if (profileData.dateOfBirth) localStorage.setItem('master_admin_dob', profileData.dateOfBirth);
+  if (profileData.department) localStorage.setItem('master_admin_dept', profileData.department);
+  if (profileData.designation) localStorage.setItem('master_admin_desig', profileData.designation);
+  if (profileData.profilePhotoUrl) localStorage.setItem('master_admin_photo', profileData.profilePhotoUrl);
+
+  if (isFirebaseConfigured() && db) {
+    try {
+      const clean = sanitizeForFirestore(profileData);
+      await setDoc(doc(db, 'systemSettings', 'master_admin_profile'), {
+        ...clean,
+        updatedAt: serverTimestamp(),
+      }, { merge: true });
+
+      if (auth?.currentUser?.uid) {
+        await setDoc(doc(db, 'users', auth.currentUser.uid), {
+          ...clean,
+          role: 'MASTER_ADMIN',
+          updatedAt: serverTimestamp(),
+        }, { merge: true });
+      }
+    } catch (err) {
+      console.warn('[AuthService] Could not persist admin profile to Firebase:', err);
+    }
+  }
 }
 
 /**
@@ -741,13 +1008,30 @@ export async function masterAdminLogin(passwordInput: string): Promise<UserProfi
     throw new Error('Invalid Master Administrator password. Default key is 927624.');
   }
 
+  let adminUid = 'Ux8lS7Pa2YbEepKtt9MMZwWrDZ62';
+
+  if (isFirebaseConfigured() && auth) {
+    try {
+      try {
+        const cred = await signInWithEmailAndPassword(auth, MASTER_ADMIN_CREDENTIALS.email, passwordInput);
+        adminUid = cred.user.uid;
+      } catch {
+        const cred = await signInWithEmailAndPassword(auth, MASTER_ADMIN_CREDENTIALS.email, '927624');
+        adminUid = cred.user.uid;
+      }
+    } catch (fbErr) {
+      console.warn('[AuthService] Master Admin Firebase Auth notice:', fbErr);
+    }
+  }
+
   const profile: UserProfile = {
-    uid: 'admin_boomika_001',
+    uid: adminUid,
     email: MASTER_ADMIN_CREDENTIALS.email,
-    displayName: MASTER_ADMIN_CREDENTIALS.name,
+    displayName: localStorage.getItem('master_admin_name') || MASTER_ADMIN_CREDENTIALS.name,
     role: 'MASTER_ADMIN',
-    department: MASTER_ADMIN_CREDENTIALS.department,
-    designation: MASTER_ADMIN_CREDENTIALS.designation,
+    department: localStorage.getItem('master_admin_dept') || MASTER_ADMIN_CREDENTIALS.department,
+    designation: localStorage.getItem('master_admin_desig') || MASTER_ADMIN_CREDENTIALS.designation,
+    profilePhotoUrl: localStorage.getItem('master_admin_photo') || undefined,
     status: 'ACTIVE',
     isFirstLogin: false,
     hasSetPassword: true,

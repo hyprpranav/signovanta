@@ -1,5 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
+import { SupportIssue, IssueCategory } from '../../types';
+import {
+  getLocalSupportIssues,
+  syncSupportIssuesFromFirebase,
+  submitSupportIssue as firestoreSubmitIssue,
+  replySupportIssue as firestoreReplyIssue,
+  subscribeToSupportIssues,
+} from '../../services/firebase/firestoreService';
 import {
   AlertCircle,
   CheckCircle2,
@@ -10,27 +18,6 @@ import {
   X,
 } from 'lucide-react';
 
-type IssueCategory =
-  | 'Login or Account'
-  | 'Event Submission'
-  | 'Certificate or Approval'
-  | 'Profile Update'
-  | 'Document Upload'
-  | 'Other';
-
-type SupportIssue = {
-  id: string;
-  author: string;
-  authorId?: string;
-  role: string;
-  category: IssueCategory;
-  message: string;
-  reply?: string;
-  createdAt: string;
-  repliedAt?: string;
-};
-
-const STORAGE_KEY = 'signovanta_support_issues';
 const ISSUE_CATEGORIES: IssueCategory[] = [
   'Login or Account',
   'Event Submission',
@@ -40,25 +27,19 @@ const ISSUE_CATEGORIES: IssueCategory[] = [
   'Other',
 ];
 
-function readIssues(): SupportIssue[] {
-  try {
-    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]') as Array<Partial<SupportIssue>>;
-    return stored.map(issue => ({
-      ...issue,
-      category: issue.category || 'Other',
-    })) as SupportIssue[];
-  } catch {
-    return [];
-  }
-}
-
 export const SupportIssuesView: React.FC = () => {
   const { currentUser } = useAuth();
-  const [issues, setIssues] = useState(readIssues);
+  const [issues, setIssues] = useState<SupportIssue[]>(getLocalSupportIssues);
   const [category, setCategory] = useState<IssueCategory>('Login or Account');
   const [message, setMessage] = useState('');
   const [reply, setReply] = useState('');
   const [selectedIssueId, setSelectedIssueId] = useState<string | null>(null);
+
+  useEffect(() => {
+    void syncSupportIssuesFromFirebase().then(setIssues);
+    const unsubscribe = subscribeToSupportIssues(setIssues);
+    return () => unsubscribe();
+  }, []);
 
   if (!currentUser) return null;
 
@@ -70,35 +51,29 @@ export const SupportIssuesView: React.FC = () => {
     ));
   const selectedIssue = issues.find(issue => issue.id === selectedIssueId) || null;
 
-  const persist = (next: SupportIssue[]) => {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    window.dispatchEvent(new Event('signovanta:data-updated'));
-    setIssues(next);
-  };
-
-  const submitIssue = (event: React.FormEvent) => {
+  const submitIssue = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!message.trim()) return;
 
-    const next: SupportIssue = {
-      id: `issue_${Date.now()}`,
+    const newIssue = await firestoreSubmitIssue({
       author: currentUser.displayName,
       authorId: currentUser.uid,
       role: currentUser.role,
       category,
       message: message.trim(),
-      createdAt: new Date().toISOString(),
-    };
-    persist([next, ...issues]);
+    });
+
+    setIssues(current => [newIssue, ...current]);
     setMessage('');
   };
 
-  const sendReply = (event: React.FormEvent) => {
+  const sendReply = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!selectedIssue || !reply.trim()) return;
 
-    persist(issues.map(issue => issue.id === selectedIssue.id
-      ? { ...issue, reply: reply.trim(), repliedAt: new Date().toISOString() }
+    await firestoreReplyIssue(selectedIssue.id, reply.trim(), currentUser.displayName || 'Administrator');
+    setIssues(current => current.map(issue => issue.id === selectedIssue.id
+      ? { ...issue, reply: reply.trim(), repliedAt: new Date().toISOString(), repliedBy: currentUser.displayName }
       : issue
     ));
     setReply('');

@@ -4,7 +4,6 @@ export interface CloudinaryUploadResult {
   fileName: string;
   fileSize: number;
   format: string;
-  isSimulated?: boolean;
 }
 
 export interface CloudinaryConfig {
@@ -20,19 +19,19 @@ export const DEFAULT_CLOUDINARY_CONFIG: CloudinaryConfig = {
   uploadPreset: 'signovanta',
 };
 
-export function getSavedCloudinaryConfig(): CloudinaryConfig | null {
+export function getSavedCloudinaryConfig(): CloudinaryConfig {
   try {
     const envConfig = {
       cloudName: import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || DEFAULT_CLOUDINARY_CONFIG.cloudName,
       uploadPreset: import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET || DEFAULT_CLOUDINARY_CONFIG.uploadPreset,
       apiKey: import.meta.env.VITE_CLOUDINARY_API_KEY || '',
     };
-    if (envConfig.cloudName) return envConfig;
+    if (envConfig.cloudName && envConfig.uploadPreset) return envConfig;
 
     const stored = localStorage.getItem(CLOUDINARY_STORAGE_KEY);
     if (stored) {
       const parsed = JSON.parse(stored);
-      if (parsed.cloudName) return parsed;
+      if (parsed.cloudName && parsed.uploadPreset) return parsed;
     }
   } catch (err) {
     console.warn('Error reading Cloudinary config:', err);
@@ -50,10 +49,10 @@ export function saveCloudinaryConfig(config: CloudinaryConfig): void {
 export function validateUploadFile(
   file: File,
   allowedTypes: ('image' | 'pdf')[] = ['image', 'pdf'],
-  maxSizeMb: number = 5
+  maxSizeMb: number = 10
 ): { isValid: boolean; error?: string } {
   const isImage = file.type.startsWith('image/');
-  const isPdf = file.type === 'application/pdf';
+  const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
 
   const typeValid =
     (allowedTypes.includes('image') && isImage) ||
@@ -62,7 +61,7 @@ export function validateUploadFile(
   if (!typeValid) {
     return {
       isValid: false,
-      error: `Invalid file type. Allowed: ${allowedTypes.join(', ').toUpperCase()}`,
+      error: `Invalid file type. Allowed formats: ${allowedTypes.join(', ').toUpperCase()}`,
     };
   }
 
@@ -78,19 +77,8 @@ export function validateUploadFile(
 }
 
 /**
- * Reads a File into a base64 Data URL (resilient local storage fallback)
- */
-function readFileAsDataUrl(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = () => reject(new Error('Failed to read file document locally.'));
-    reader.readAsDataURL(file);
-  });
-}
-
-/**
- * Uploads a file to Cloudinary with progress callback, with seamless zero-error local fallback.
+ * Uploads a file permanently to Cloudinary cloud with real-time progress callback.
+ * Base64 browser-only storage is strictly forbidden.
  */
 export async function uploadToCloudinary(
   file: File,
@@ -103,74 +91,55 @@ export async function uploadToCloudinary(
   }
 
   const config = getSavedCloudinaryConfig();
-
-  // If Cloudinary is configured with valid Cloud Name & Preset, attempt upload to Cloudinary cloud
-  if (config?.cloudName && config.uploadPreset) {
-    try {
-      return await new Promise<CloudinaryUploadResult>((resolve, reject) => {
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('upload_preset', config.uploadPreset);
-        formData.append('folder', `signovanta/${folder}`);
-
-        const xhr = new XMLHttpRequest();
-        xhr.open('POST', `https://api.cloudinary.com/v1_1/${config.cloudName}/auto/upload`);
-
-        xhr.upload.onprogress = (e) => {
-          if (e.lengthComputable && onProgress) {
-            const percent = Math.round((e.loaded / e.total) * 100);
-            onProgress(percent);
-          }
-        };
-
-        xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) {
-            try {
-              const data = JSON.parse(xhr.responseText);
-              resolve({
-                url: data.secure_url,
-                publicId: data.public_id,
-                fileName: file.name,
-                fileSize: file.size,
-                format: data.format || file.type.split('/')[1] || 'bin',
-                isSimulated: false,
-              });
-            } catch (err) {
-              reject(new Error('Failed to parse Cloudinary response.'));
-            }
-          } else {
-            try {
-              const errData = JSON.parse(xhr.responseText);
-              reject(new Error(errData.error?.message || 'Cloudinary upload rejected.'));
-            } catch {
-              reject(new Error(`Cloudinary upload failed with status ${xhr.status}`));
-            }
-          }
-        };
-
-        xhr.onerror = () => reject(new Error('Network error during media upload.'));
-        xhr.send(formData);
-      });
-    } catch (cloudErr) {
-      console.warn('[SIGNOVANTA Cloudinary] Cloud upload unavailable or encountered error, smoothly utilizing high-fidelity local fallback:', cloudErr);
-      // Fall through to seamless fallback below
-    }
+  if (!config?.cloudName || !config?.uploadPreset) {
+    throw new Error('Cloudinary cloud name or upload preset is not configured.');
   }
 
-  // Seamless Zero-Error Fallback: Read file as high-fidelity Data URL so the student is never blocked
-  if (onProgress) {
-    onProgress(30);
-    setTimeout(() => onProgress(75), 80);
-    setTimeout(() => onProgress(100), 160);
-  }
+  return new Promise<CloudinaryUploadResult>((resolve, reject) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', config.uploadPreset);
+    formData.append('folder', `signovanta/${folder}`);
 
-  const dataUrl = await readFileAsDataUrl(file);
-  return {
-    url: dataUrl,
-    publicId: `doc_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
-    fileName: file.name,
-    fileSize: file.size,
-    format: file.type.split('/')[1] || 'bin',
-    isSimulated: true,
-  };
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', `https://api.cloudinary.com/v1_1/${config.cloudName}/auto/upload`);
+
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && onProgress) {
+        const percent = Math.round((e.loaded / e.total) * 100);
+        onProgress(percent);
+      }
+    };
+
+    xhr.onload = () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const data = JSON.parse(xhr.responseText);
+          if (!data.secure_url) {
+            reject(new Error('Cloudinary response missing secure_url.'));
+            return;
+          }
+          resolve({
+            url: data.secure_url,
+            publicId: data.public_id,
+            fileName: file.name,
+            fileSize: file.size,
+            format: data.format || file.type.split('/')[1] || 'bin',
+          });
+        } catch {
+          reject(new Error('Failed to parse Cloudinary response.'));
+        }
+      } else {
+        try {
+          const errData = JSON.parse(xhr.responseText);
+          reject(new Error(errData.error?.message || `Cloudinary rejected upload with status ${xhr.status}`));
+        } catch {
+          reject(new Error(`Cloudinary upload failed with status ${xhr.status}`));
+        }
+      }
+    };
+
+    xhr.onerror = () => reject(new Error('Network error during media upload to Cloudinary. Check your internet connection.'));
+    xhr.send(formData);
+  });
 }

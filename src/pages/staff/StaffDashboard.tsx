@@ -25,7 +25,11 @@ import {
   saveStudentRegistrationRequests,
   approveStudentRegistrationRequest,
   rejectStudentRegistrationRequest,
+  updateStaffProfile,
+  changeStaffPassword,
+  syncStudentRegistrationRequestsFromFirebase,
 } from '../../services/firebase/authService';
+import { uploadToCloudinary } from '../../services/cloudinary/cloudinaryService';
 import { Badge } from '../../components/common/Badge';
 import { Button } from '../../components/common/Button';
 import { ProgressBar } from '../../components/common/ProgressBar';
@@ -53,6 +57,7 @@ import {
   LayoutDashboard,
   FileText,
   ArrowRight,
+  UploadCloud,
 } from 'lucide-react';
 
 interface StaffDashboardProps {
@@ -82,6 +87,8 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({ activeTab: reque
   const [staffDesignation, setStaffDesignation] = useState(() => staffData?.designation || 'Faculty Coordinator');
   const [staffCabin, setStaffCabin] = useState(() => staffData?.cabinNumber || 'ECE-Block-302');
   const [staffPhotoUrl, setStaffPhotoUrl] = useState(() => currentUser?.profilePhotoUrl || staffData?.profilePhotoUrl || '');
+  const [uploadingStaffPhoto, setUploadingStaffPhoto] = useState(false);
+  const [uploadStaffPhotoProgress, setUploadStaffPhotoProgress] = useState(0);
   const [profileSuccessMsg, setProfileSuccessMsg] = useState<string | null>(null);
 
   // Staff Password Change State
@@ -93,9 +100,55 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({ activeTab: reque
   const [showCurrentPwd, setShowCurrentPwd] = useState(false);
   const [showNewPwd, setShowNewPwd] = useState(false);
 
-  const handleSaveStaffProfile = (e: React.FormEvent) => {
+  const handleStaffPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingStaffPhoto(true);
+    setUploadStaffPhotoProgress(15);
+    try {
+      const res = await uploadToCloudinary(file, 'profile_photos', (pct) => {
+        setUploadStaffPhotoProgress(pct);
+      });
+      setStaffPhotoUrl(res.url);
+
+      if (staffData?.staffId) {
+        await updateStaffProfile(staffData.staffId, {
+          profilePhotoUrl: res.url,
+        });
+      }
+
+      const stored = localStorage.getItem('signovanta_current_user');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        parsed.profilePhotoUrl = res.url;
+        localStorage.setItem('signovanta_current_user', JSON.stringify(parsed));
+      }
+      setProfileSuccessMsg('✓ Faculty profile photo uploaded to Cloudinary & saved!');
+      setTimeout(() => setProfileSuccessMsg(null), 4000);
+    } catch (err: any) {
+      alert(err.message || 'Photo upload failed');
+    } finally {
+      setUploadingStaffPhoto(false);
+    }
+  };
+
+  const handleSaveStaffProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
+      if (staffData?.staffId) {
+        await updateStaffProfile(staffData.staffId, {
+          fullName: staffName.trim(),
+          email: staffEmail.trim().toLowerCase(),
+          mobile: staffMobile.trim(),
+          dateOfBirth: staffDob,
+          department: staffDepartment,
+          designation: staffDesignation.trim(),
+          cabinNumber: staffCabin.trim(),
+          profilePhotoUrl: staffPhotoUrl,
+        });
+      }
+
       const stored = localStorage.getItem('signovanta_current_user');
       if (stored) {
         const parsed = JSON.parse(stored);
@@ -106,13 +159,15 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({ activeTab: reque
         parsed.profilePhotoUrl = staffPhotoUrl;
         localStorage.setItem('signovanta_current_user', JSON.stringify(parsed));
       }
-    } catch {}
 
-    setProfileSuccessMsg('✓ Faculty profile updated successfully!');
-    setTimeout(() => setProfileSuccessMsg(null), 4000);
+      setProfileSuccessMsg('✓ Faculty profile updated and saved permanently in Firebase!');
+      setTimeout(() => setProfileSuccessMsg(null), 4000);
+    } catch (err: any) {
+      alert(err.message || 'Failed to update profile');
+    }
   };
 
-  const handleChangeStaffPassword = (e: React.FormEvent) => {
+  const handleChangeStaffPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setPasswordErrorMsg(null);
     setPasswordSuccessMsg(null);
@@ -130,11 +185,24 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({ activeTab: reque
       return;
     }
 
-    setPasswordSuccessMsg('✓ Password updated successfully! Please use your new password for future sign-ins.');
-    setCurrentStaffPassword('');
-    setNewStaffPassword('');
-    setConfirmStaffPassword('');
-    setTimeout(() => setPasswordSuccessMsg(null), 5000);
+    try {
+      if (staffData?.staffId) {
+        await changeStaffPassword(
+          staffData.staffId,
+          currentUser?.email || staffEmail,
+          currentStaffPassword,
+          newStaffPassword
+        );
+      }
+
+      setPasswordSuccessMsg('✓ Password updated successfully in Firebase! Please use your new password for future sign-ins.');
+      setCurrentStaffPassword('');
+      setNewStaffPassword('');
+      setConfirmStaffPassword('');
+      setTimeout(() => setPasswordSuccessMsg(null), 5000);
+    } catch (err: any) {
+      setPasswordErrorMsg(err.message || 'Failed to update password');
+    }
   };
 
   const handleApproveStudentReq = (reqId: string) => {
@@ -1067,8 +1135,32 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({ activeTab: reque
                 </div>
               </div>
 
+              <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl flex items-center gap-4">
+                <div className="w-14 h-14 rounded-xl bg-slate-200 overflow-hidden ring-2 ring-white shadow-xs shrink-0 flex items-center justify-center">
+                  {staffPhotoUrl ? (
+                    <img src={staffPhotoUrl} alt="Faculty Avatar" className="w-full h-full object-cover" />
+                  ) : (
+                    <User size={24} className="text-slate-400" />
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <span className="text-xs font-bold text-slate-800 block truncate">Faculty Profile Picture</span>
+                  <label className="inline-flex items-center gap-1.5 mt-1 px-3 py-1 bg-white hover:bg-slate-100 border border-slate-300 rounded-xl text-[11px] font-bold text-slate-700 cursor-pointer transition-colors shadow-xs">
+                    <UploadCloud size={13} />
+                    <span>{uploadingStaffPhoto ? `Uploading (${uploadStaffPhotoProgress}%)...` : 'Upload to Cloudinary'}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleStaffPhotoUpload}
+                      disabled={uploadingStaffPhoto}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+              </div>
+
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Profile Photo URL</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Direct Photo URL (Optional)</label>
                 <input
                   type="url"
                   value={staffPhotoUrl}

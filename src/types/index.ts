@@ -116,6 +116,7 @@ export interface Staff {
   createdAt: string;
   approvedAt?: string;
   approvedBy?: string;
+  lastLoginAt?: string;
 }
 
 // ------------------------------------------------------------------------------
@@ -295,4 +296,28 @@ export interface AcademicSection {
   year: string;    // e.g. "III Year"
   section: string; // e.g. "V Section", "A Section", "C Section"
   department: string;
+}
+
+// ------------------------------------------------------------------------------
+// Support Issues & Help Desk
+// ------------------------------------------------------------------------------
+export type IssueCategory =
+  | 'Login or Account'
+  | 'Event Submission'
+  | 'Certificate or Approval'
+  | 'Profile Update'
+  | 'Document Upload'
+  | 'Other';
+
+export interface SupportIssue {
+  id: string;
+  author: string;
+  authorId?: string;
+  role: string;
+  category: IssueCategory;
+  message: string;
+  reply?: string;
+  repliedAt?: string;
+  repliedBy?: string;
+  createdAt: string;
 }

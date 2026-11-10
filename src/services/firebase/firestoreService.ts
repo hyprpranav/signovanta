@@ -8,10 +8,22 @@ import {
   AcademicSection,
   ApplicationStatus,
   UserRole,
+  SupportIssue,
+  IssueCategory,
 } from '../../types';
 import { INITIAL_CATEGORIES, INITIAL_SECTIONS } from '../../data/seedStudents';
 import { db, isFirebaseConfigured } from './firebaseConfig';
-import { collection, doc, getDocs, setDoc, serverTimestamp, deleteDoc } from 'firebase/firestore';
+import {
+  collection,
+  doc,
+  getDocs,
+  getDoc,
+  setDoc,
+  updateDoc,
+  deleteDoc,
+  serverTimestamp,
+  onSnapshot,
+} from 'firebase/firestore';
 
 const APPLICATIONS_KEY = 'signovanta_applications_cache';
 const TEAMS_KEY = 'signovanta_teams_cache';
@@ -197,6 +209,24 @@ export async function syncApplicationsFromFirebase(): Promise<EventApplication[]
   } catch (error) {
     console.error('[SIGNOVANTA] Failed to load event applications from Firebase', error);
     return getAllApplications();
+  }
+}
+
+export function subscribeToApplications(callback: (apps: EventApplication[]) => void): () => void {
+  if (!isFirebaseConfigured() || !db) return () => {};
+  try {
+    return onSnapshot(collection(db, 'eventApplications'), (snapshot) => {
+      const remote = snapshot.docs.map(item => ({ id: item.id, ...item.data() })) as EventApplication[];
+      if (remote.length > 0) {
+        saveAllApplications(remote);
+        callback(remote);
+      }
+    }, (error) => {
+      console.warn('[SIGNOVANTA] Applications subscription warning:', error);
+    });
+  } catch (err) {
+    console.warn('[SIGNOVANTA] Could not subscribe to applications:', err);
+    return () => {};
   }
 }
 
@@ -800,4 +830,147 @@ export function getAcademicSections(): AcademicSection[] {
 
 export function saveAcademicSections(sections: AcademicSection[]): void {
   localStorage.setItem(SECTIONS_KEY, JSON.stringify(sections));
+}
+
+// ------------------------------------------------------------------------------
+// Real-Time Notifications Subscription
+// ------------------------------------------------------------------------------
+export function subscribeToNotifications(userId: string, callback: (notifs: AppNotification[]) => void): () => void {
+  if (!isFirebaseConfigured() || !db) return () => {};
+  try {
+    return onSnapshot(collection(db, 'notifications'), (snapshot) => {
+      const all = snapshot.docs.map(d => ({ id: d.id, ...d.data() })) as AppNotification[];
+      const userNotifs = all.filter(n => n.userId === userId || n.userId === 'ALL');
+      callback(userNotifs);
+    }, () => {});
+  } catch {
+    return () => {};
+  }
+}
+
+// ------------------------------------------------------------------------------
+// Support Issues & Help Desk Service (Live Firebase Persistence)
+// ------------------------------------------------------------------------------
+const SUPPORT_ISSUES_KEY = 'signovanta_support_issues';
+
+export function getLocalSupportIssues(): SupportIssue[] {
+  try {
+    const raw = localStorage.getItem(SUPPORT_ISSUES_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return [];
+}
+
+export function saveLocalSupportIssues(issues: SupportIssue[]): void {
+  localStorage.setItem(SUPPORT_ISSUES_KEY, JSON.stringify(issues));
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('signovanta:data-updated'));
+  }
+}
+
+export async function syncSupportIssuesFromFirebase(): Promise<SupportIssue[]> {
+  if (!isFirebaseConfigured() || !db) return getLocalSupportIssues();
+  try {
+    const snap = await getDocs(collection(db, 'supportIssues'));
+    if (!snap.empty) {
+      const issues = snap.docs.map(d => ({ id: d.id, ...d.data() })) as SupportIssue[];
+      saveLocalSupportIssues(issues);
+      return issues;
+    }
+  } catch {}
+
+  // Fallback to systemSettings/support_issues
+  try {
+    const snap = await getDoc(doc(db, 'systemSettings', 'support_issues'));
+    if (snap.exists() && snap.data().issues) {
+      const issues = snap.data().issues as SupportIssue[];
+      saveLocalSupportIssues(issues);
+      return issues;
+    }
+  } catch {}
+
+  return getLocalSupportIssues();
+}
+
+export async function submitSupportIssue(issueData: Omit<SupportIssue, 'id' | 'createdAt'>): Promise<SupportIssue> {
+  const newIssue: SupportIssue = {
+    ...issueData,
+    id: `issue_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+    createdAt: new Date().toISOString(),
+  };
+
+  const clean = sanitizeForFirestore(newIssue);
+
+  if (isFirebaseConfigured() && db) {
+    try {
+      await setDoc(doc(db, 'supportIssues', newIssue.id), {
+        ...clean,
+        updatedAt: serverTimestamp(),
+      });
+    } catch (err) {
+      console.warn('[SIGNOVANTA] Direct supportIssues write notice, mirroring to systemSettings:', err);
+    }
+    try {
+      const snap = await getDoc(doc(db, 'systemSettings', 'support_issues'));
+      const list: SupportIssue[] = snap.exists() ? snap.data().issues || [] : [];
+      list.unshift(newIssue);
+      await setDoc(doc(db, 'systemSettings', 'support_issues'), { issues: list, updatedAt: serverTimestamp() }, { merge: true });
+    } catch {}
+  }
+
+  const list = getLocalSupportIssues();
+  list.unshift(newIssue);
+  saveLocalSupportIssues(list);
+  return newIssue;
+}
+
+export async function replySupportIssue(issueId: string, replyText: string, repliedByName: string): Promise<void> {
+  const repliedAt = new Date().toISOString();
+  if (isFirebaseConfigured() && db) {
+    try {
+      await updateDoc(doc(db, 'supportIssues', issueId), {
+        reply: replyText.trim(),
+        repliedAt,
+        repliedBy: repliedByName,
+        updatedAt: serverTimestamp(),
+      });
+    } catch {}
+    try {
+      const snap = await getDoc(doc(db, 'systemSettings', 'support_issues'));
+      if (snap.exists()) {
+        const list: SupportIssue[] = snap.data().issues || [];
+        const idx = list.findIndex(i => i.id === issueId);
+        if (idx !== -1) {
+          list[idx].reply = replyText.trim();
+          list[idx].repliedAt = repliedAt;
+          list[idx].repliedBy = repliedByName;
+          await setDoc(doc(db, 'systemSettings', 'support_issues'), { issues: list, updatedAt: serverTimestamp() }, { merge: true });
+        }
+      }
+    } catch {}
+  }
+
+  const list = getLocalSupportIssues();
+  const idx = list.findIndex(i => i.id === issueId);
+  if (idx !== -1) {
+    list[idx].reply = replyText.trim();
+    list[idx].repliedAt = repliedAt;
+    list[idx].repliedBy = repliedByName;
+    saveLocalSupportIssues(list);
+  }
+}
+
+export function subscribeToSupportIssues(callback: (issues: SupportIssue[]) => void): () => void {
+  if (!isFirebaseConfigured() || !db) return () => {};
+  try {
+    return onSnapshot(collection(db, 'supportIssues'), (snapshot) => {
+      const issues = snapshot.docs.map(d => ({ id: d.id, ...d.data() })) as SupportIssue[];
+      if (issues.length > 0) {
+        saveLocalSupportIssues(issues);
+        callback(issues);
+      }
+    }, () => {});
+  } catch {
+    return () => {};
+  }
 }

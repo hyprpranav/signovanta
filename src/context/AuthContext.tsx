@@ -1,4 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import { onAuthStateChanged } from 'firebase/auth';
+import { auth, isFirebaseConfigured } from '../services/firebase/firebaseConfig';
 import { UserProfile, Student, Staff, UserRole, StudentRegistrationRequest } from '../types';
 import {
   studentLogin as authStudentLogin,
@@ -32,8 +34,8 @@ interface AuthContextType {
   // Student registration request methods
   submitStudentRequest: (data: { registrationNumber: string; fullName: string; email: string; mobile: string; section: string }) => Promise<StudentRegistrationRequest>;
   getPendingStudentRequests: () => StudentRegistrationRequest[];
-  approveStudentRequest: (requestId: string) => Student;
-  rejectStudentRequest: (requestId: string) => void;
+  approveStudentRequest: (requestId: string) => Promise<Student>;
+  rejectStudentRequest: (requestId: string) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -46,7 +48,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [staffData, setStaffData] = useState<Staff | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Restore session on mount
+  // Restore session on mount and sync with Firebase Auth
   useEffect(() => {
     try {
       const savedSession = localStorage.getItem(CURRENT_USER_STORAGE);
@@ -82,6 +84,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       console.warn('Failed to restore user session:', e);
     } finally {
       setIsLoading(false);
+    }
+
+    if (isFirebaseConfigured() && auth) {
+      const unsubscribe = onAuthStateChanged(auth, (fbUser) => {
+        if (!fbUser) return;
+        const savedSession = localStorage.getItem(CURRENT_USER_STORAGE);
+        if (!savedSession) {
+          if (fbUser.email === 'boomika@gmail.com') {
+            const adminUser: UserProfile = {
+              uid: fbUser.uid,
+              email: 'boomika@gmail.com',
+              displayName: localStorage.getItem('master_admin_name') || 'Boomika',
+              role: 'MASTER_ADMIN',
+              department: 'Electronics & Communication Engineering',
+              designation: 'Head Administrator',
+              status: 'ACTIVE',
+              isFirstLogin: false,
+              hasSetPassword: true,
+              createdAt: '2026-01-01T00:00:00Z',
+              lastLoginAt: new Date().toISOString(),
+            };
+            setCurrentUser(adminUser);
+            localStorage.setItem(CURRENT_USER_STORAGE, JSON.stringify(adminUser));
+          }
+        }
+      });
+      return () => unsubscribe();
     }
   }, []);
 

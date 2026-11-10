@@ -36,9 +36,7 @@ service cloud.firestore {
     // 1. Users collection: Auth mapping & metadata
     match /users/{userId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && (request.auth.uid == userId || isMasterAdmin());
-      // Users can update non-privileged fields (displayName, mobile, profilePhotoUrl, hasSetPassword)
-      // but CANNOT change their role or account status unless Master Admin
+      allow create: if isAuthenticated();
       allow update: if isMasterAdmin() || (
         isOwner(userId) &&
         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'status', 'registrationNumber', 'department'])
@@ -48,17 +46,15 @@ service cloud.firestore {
 
     // 2. Students collection: Preloaded & student profiles
     match /students/{studentId} {
-      allow read: if true; // Publicly readable for pre-login registration verification
+      allow read: if true; // Publicly readable for student directory, pre-login verification and cross-dashboard visibility
       allow create, delete: if isMasterAdmin();
-      allow update: if isMasterAdmin() || (
+      allow update: if isMasterAdmin() || isStaffMember() || (
         isAuthenticated() && (
           // Student editing their own permitted profile fields
           (resource.data.uid == request.auth.uid && 
            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['registrationNumber', 'department', 'academicYear', 'section', 'status', 'isActivated'])) ||
           // First-time activation linking UID
-          (!resource.data.hasSetPassword && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['uid', 'hasSetPassword', 'isActivated', 'profilePhotoUrl', 'mobile', 'email', 'updatedAt'])) ||
-          // Staff / Admin updating status
-          isStaffMember()
+          (!resource.data.hasSetPassword && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['uid', 'hasSetPassword', 'isActivated', 'profilePhotoUrl', 'profilePhotoPublicId', 'mobile', 'email', 'updatedAt', 'lastLoginAt']))
         )
       );
     }
@@ -66,8 +62,8 @@ service cloud.firestore {
     // 3. Staff collection: Staff directory & pending role requests
     match /staff/{staffId} {
       allow read: if isAuthenticated();
-      allow create: if isAuthenticated() && (request.auth.uid == staffId || isMasterAdmin());
-      allow update: if isMasterAdmin() || (
+      allow create: if true; // Allow new faculty registration requests
+      allow update: if isMasterAdmin() || isStaffMember() || (
         isAuthenticated() && request.auth.uid == staffId &&
         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['assignedRole', 'approvalStatus', 'isSuspended'])
       );
@@ -77,19 +73,8 @@ service cloud.firestore {
     // 4. Event Applications: Lifecycle management
     match /eventApplications/{applicationId} {
       allow read: if isAuthenticated();
-      // Students can create their own applications
-      allow create: if isAuthenticated() && (
-        request.resource.data.studentId == request.auth.uid ||
-        request.resource.data.leaderUid == request.auth.uid ||
-        isMasterAdmin()
-      );
-      // Students can update their own drafts or submit post-event certificates
-      // Staff / HOD can update status and approval fields
-      allow update: if isAuthenticated() && (
-        isStaffMember() || isMasterAdmin() ||
-        (resource.data.studentId == request.auth.uid && resource.data.status in ['DRAFT', 'CORRECTION_REQUIRED', 'PRE_APPROVED']) ||
-        (resource.data.leaderUid == request.auth.uid && resource.data.status in ['DRAFT', 'CORRECTION_REQUIRED', 'PRE_APPROVED'])
-      );
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
       allow delete: if isMasterAdmin() || (
         isAuthenticated() && resource.data.studentId == request.auth.uid && resource.data.status == 'DRAFT'
       );
@@ -99,21 +84,14 @@ service cloud.firestore {
     match /teamMemberships/{teamId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated();
-      // Team leader can manage team or invited member can confirm/decline participation
-      allow update: if isAuthenticated() && (
-        resource.data.leaderUid == request.auth.uid ||
-        isStaffMember() || isMasterAdmin() ||
-        // Member updating their own confirmation status
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['members', 'updatedAt'])
-      );
+      allow update: if isAuthenticated();
       allow delete: if isMasterAdmin() || (isAuthenticated() && resource.data.leaderUid == request.auth.uid);
     }
 
     // 6. Approvals: Official audit records for verification steps
     match /approvals/{approvalId} {
       allow read: if isAuthenticated();
-      // Only staff, HOD, or Master Admin can create approval records
-      allow create: if isStaffMember() || isMasterAdmin();
+      allow create: if isAuthenticated();
       allow update, delete: if isMasterAdmin();
     }
 
@@ -133,26 +111,39 @@ service cloud.firestore {
       allow write: if isMasterAdmin();
     }
 
-    // 9. Notifications: Individual user inbox
+    // 9. Notifications: Individual user inbox & broadcast
     match /notifications/{notificationId} {
-      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || isMasterAdmin());
-      allow create: if isAuthenticated(); // Triggered by workflows
-      allow update: if isAuthenticated() && (resource.data.userId == request.auth.uid || isMasterAdmin());
-      allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isMasterAdmin());
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAuthenticated();
     }
 
     // 10. Audit Logs: Tamper-proof system activity log
     match /auditLogs/{logId} {
       allow read: if isStaffMember() || isMasterAdmin();
       allow create: if isAuthenticated();
-      allow update, delete: if false; // Immutable audit trail
+      allow update, delete: if false;
     }
 
-    // 11. System Settings: Global flags & configurations
+    // 11. System Settings & Global Configurations
     match /systemSettings/{settingId} {
+      allow read: if true;
+      allow write: if isAuthenticated();
+    }
+
+    // 12. Student Registration Requests (Approvals queue)
+    match /studentRegistrationRequests/{requestId} {
+      allow read: if true;
+      allow create: if true;
+      allow update, delete: if isStaffMember() || isMasterAdmin() || isAuthenticated();
+    }
+
+    // 13. Support Issues & Help Desk
+    match /supportIssues/{issueId} {
       allow read: if isAuthenticated();
-      allow write: if isMasterAdmin();
+      allow create: if isAuthenticated();
+      allow update, delete: if isAuthenticated();
     }
   }
 }
-

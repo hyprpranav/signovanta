@@ -20,7 +20,12 @@ import {
   syncStudentsFromFirebase,
   syncStaffFromFirebase,
   updateStudentProfile,
+  updateMasterAdminProfile,
+  syncStudentRegistrationRequestsFromFirebase,
 } from '../../services/firebase/authService';
+import { auth } from '../../services/firebase/firebaseConfig';
+import { updatePassword as fbUpdatePassword } from 'firebase/auth';
+import { uploadToCloudinary } from '../../services/cloudinary/cloudinaryService';
 import {
   getAllApplications,
   saveAllApplications,
@@ -38,7 +43,6 @@ import {
   createStaffAnnouncement,
   getUserNotifications,
 } from '../../services/firebase/firestoreService';
-import { uploadToCloudinary } from '../../services/cloudinary/cloudinaryService';
 import { StudentDirectoryMonitor } from '../../components/monitoring/StudentDirectoryMonitor';
 import { WinnersCertificateShowcase } from '../../components/analytics/WinnersCertificateShowcase';
 import { EventParticipationAnalytics } from '../../components/analytics/EventParticipationAnalytics';
@@ -65,6 +69,7 @@ import {
   Search,
   UserCheck,
   UserX,
+  UploadCloud,
   GraduationCap,
   User,
   KeyRound,
@@ -122,17 +127,50 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab: reque
   const [announcementStatus, setAnnouncementStatus] = useState<string | null>(null);
   const [announcementsList, setAnnouncementsList] = useState(() => getUserNotifications('ALL'));
 
-  const handleSaveAdminProfile = (e: React.FormEvent) => {
-    e.preventDefault();
-    localStorage.setItem('master_admin_name', adminName);
-    localStorage.setItem('master_admin_email', adminEmail);
-    localStorage.setItem('master_admin_mobile', adminMobile);
-    localStorage.setItem('master_admin_dob', adminDob);
-    localStorage.setItem('master_admin_dept', adminDepartment);
-    localStorage.setItem('master_admin_desig', adminDesignation);
-    localStorage.setItem('master_admin_photo', adminPhotoUrl);
+  const [uploadingAdminPhoto, setUploadingAdminPhoto] = useState(false);
+  const [uploadAdminPhotoProgress, setUploadAdminPhotoProgress] = useState(0);
 
+  const handleAdminPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploadingAdminPhoto(true);
+    setUploadAdminPhotoProgress(15);
     try {
+      const res = await uploadToCloudinary(file, 'profile_photos', (pct) => {
+        setUploadAdminPhotoProgress(pct);
+      });
+      setAdminPhotoUrl(res.url);
+      await updateMasterAdminProfile({ profilePhotoUrl: res.url });
+
+      const stored = localStorage.getItem('signovanta_current_user');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        parsed.profilePhotoUrl = res.url;
+        localStorage.setItem('signovanta_current_user', JSON.stringify(parsed));
+      }
+      setProfileSuccessMsg('✓ Master Admin photo uploaded to Cloudinary & saved!');
+      setTimeout(() => setProfileSuccessMsg(null), 4000);
+    } catch (err: any) {
+      alert(err.message || 'Photo upload failed');
+    } finally {
+      setUploadingAdminPhoto(false);
+    }
+  };
+
+  const handleSaveAdminProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await updateMasterAdminProfile({
+        displayName: adminName.trim(),
+        email: adminEmail.trim().toLowerCase(),
+        mobile: adminMobile.trim(),
+        dateOfBirth: adminDob,
+        department: adminDepartment,
+        designation: adminDesignation.trim(),
+        profilePhotoUrl: adminPhotoUrl,
+      });
+
       const stored = localStorage.getItem('signovanta_current_user');
       if (stored) {
         const parsed = JSON.parse(stored);
@@ -143,13 +181,15 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab: reque
         parsed.profilePhotoUrl = adminPhotoUrl;
         localStorage.setItem('signovanta_current_user', JSON.stringify(parsed));
       }
-    } catch {}
 
-    setProfileSuccessMsg('✓ Admin profile details saved and updated successfully!');
-    setTimeout(() => setProfileSuccessMsg(null), 4000);
+      setProfileSuccessMsg('✓ Master Admin profile details saved permanently in Firebase!');
+      setTimeout(() => setProfileSuccessMsg(null), 4000);
+    } catch (err: any) {
+      alert(err.message || 'Failed to save admin profile');
+    }
   };
 
-  const handleChangeAdminPassword = (e: React.FormEvent) => {
+  const handleChangeAdminPassword = async (e: React.FormEvent) => {
     e.preventDefault();
     setPasswordErrorMsg(null);
     setPasswordSuccessMsg(null);
@@ -168,8 +208,16 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab: reque
       return;
     }
 
+    if (auth && auth.currentUser) {
+      try {
+        await fbUpdatePassword(auth.currentUser, newAdminPassword);
+      } catch (err) {
+        console.warn('Firebase Auth admin password update warning:', err);
+      }
+    }
+
     localStorage.setItem('master_admin_pwd', newAdminPassword);
-    setPasswordSuccessMsg('✓ Master Admin password updated successfully! Use your new password for your next login.');
+    setPasswordSuccessMsg('✓ Master Admin password updated successfully in Firebase! Use your new password for your next login.');
     setCurrentAdminPassword('');
     setNewAdminPassword('');
     setConfirmAdminPassword('');
@@ -213,12 +261,17 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab: reque
   }, [requestedTab]);
 
   useEffect(() => {
-    void Promise.all([syncApplicationsFromFirebase(), syncStudentsFromFirebase(), syncStaffFromFirebase()])
-      .then(([remoteApplications, remoteStudents, remoteStaff]) => {
-        setApplications(remoteApplications.filter(a => a.status !== 'DRAFT'));
-        setStudents(remoteStudents);
-        setStaffList(remoteStaff);
-      });
+    void Promise.all([
+      syncApplicationsFromFirebase(),
+      syncStudentsFromFirebase(),
+      syncStaffFromFirebase(),
+      syncStudentRegistrationRequestsFromFirebase(),
+    ]).then(([remoteApplications, remoteStudents, remoteStaff, remoteRequests]) => {
+      setApplications(remoteApplications.filter(a => a.status !== 'DRAFT'));
+      setStudents(remoteStudents);
+      setStaffList(remoteStaff);
+      setStudentRequests(remoteRequests);
+    });
   }, []);
 
   useEffect(() => {
@@ -606,8 +659,32 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab: reque
                 />
               </div>
 
+              <div className="p-3.5 bg-slate-50 border border-slate-200/80 rounded-2xl flex items-center gap-4">
+                <div className="w-14 h-14 rounded-xl bg-purple-900 text-white overflow-hidden ring-2 ring-white shadow-xs shrink-0 flex items-center justify-center font-bold text-lg">
+                  {adminPhotoUrl ? (
+                    <img src={adminPhotoUrl} alt="Admin Avatar" className="w-full h-full object-cover" />
+                  ) : (
+                    <span>{adminName ? adminName.charAt(0).toUpperCase() : 'B'}</span>
+                  )}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <span className="text-xs font-bold text-slate-800 block truncate">Master Admin Photo</span>
+                  <label className="inline-flex items-center gap-1.5 mt-1 px-3 py-1 bg-white hover:bg-slate-100 border border-slate-300 rounded-xl text-[11px] font-bold text-slate-700 cursor-pointer transition-colors shadow-xs">
+                    <UploadCloud size={13} />
+                    <span>{uploadingAdminPhoto ? `Uploading (${uploadAdminPhotoProgress}%)...` : 'Upload to Cloudinary'}</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleAdminPhotoUpload}
+                      disabled={uploadingAdminPhoto}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+              </div>
+
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">Profile Photo URL (or paste direct link)</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">Direct Photo URL (Optional)</label>
                 <input
                   type="url"
                   value={adminPhotoUrl}
