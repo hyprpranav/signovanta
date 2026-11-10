@@ -202,7 +202,6 @@ export async function syncApplicationsFromFirebase(): Promise<EventApplication[]
   if (!isFirebaseConfigured() || !db) return getAllApplications();
   try {
     const snapshot = await getDocs(collection(db, 'eventApplications'));
-    if (snapshot.empty) return getAllApplications();
     const remote = snapshot.docs.map(item => ({ id: item.id, ...item.data() })) as EventApplication[];
     saveAllApplications(remote);
     return remote;
@@ -217,10 +216,8 @@ export function subscribeToApplications(callback: (apps: EventApplication[]) => 
   try {
     return onSnapshot(collection(db, 'eventApplications'), (snapshot) => {
       const remote = snapshot.docs.map(item => ({ id: item.id, ...item.data() })) as EventApplication[];
-      if (remote.length > 0) {
-        saveAllApplications(remote);
-        callback(remote);
-      }
+      saveAllApplications(remote);
+      callback(remote);
     }, (error) => {
       console.warn('[SIGNOVANTA] Applications subscription warning:', error);
     });

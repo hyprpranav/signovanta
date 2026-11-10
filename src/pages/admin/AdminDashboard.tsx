@@ -22,6 +22,8 @@ import {
   updateStudentProfile,
   updateMasterAdminProfile,
   syncStudentRegistrationRequestsFromFirebase,
+  subscribeToStaff,
+  subscribeToStudentRequests,
 } from '../../services/firebase/authService';
 import { auth } from '../../services/firebase/firebaseConfig';
 import { updatePassword as fbUpdatePassword } from 'firebase/auth';
@@ -34,6 +36,7 @@ import {
   getAcademicSections,
   saveAcademicSections,
   syncApplicationsFromFirebase,
+  subscribeToApplications,
   getApprovalLogs,
   preApproveApplication,
   completeEventApplication,
@@ -272,6 +275,22 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab: reque
       setStaffList(remoteStaff);
       setStudentRequests(remoteRequests);
     });
+
+    const unsubApps = subscribeToApplications((remote) => {
+      setApplications(remote.filter(a => a.status !== 'DRAFT'));
+    });
+    const unsubStaff = subscribeToStaff((remote) => {
+      setStaffList(remote);
+    });
+    const unsubReqs = subscribeToStudentRequests((remote) => {
+      setStudentRequests(remote);
+    });
+
+    return () => {
+      unsubApps();
+      unsubStaff();
+      unsubReqs();
+    };
   }, []);
 
   useEffect(() => {

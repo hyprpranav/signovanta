@@ -1,7 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { EventApplication } from '../../types';
-import { getApplicationsForStudent, getApprovalLogs, deleteApplication } from '../../services/firebase/firestoreService';
+import {
+  getApplicationsForStudent,
+  getApprovalLogs,
+  deleteApplication,
+  syncApplicationsFromFirebase,
+  subscribeToApplications,
+} from '../../services/firebase/firestoreService';
 import { Badge } from '../../components/common/Badge';
 import { Button } from '../../components/common/Button';
 import { ProgressBar } from '../../components/common/ProgressBar';
@@ -47,6 +53,16 @@ export const StudentApplicationsView: React.FC<StudentApplicationsViewProps> = (
   const reload = () => {
     setApplications(getApplicationsForStudent(studentData.registrationNumber));
   };
+
+  useEffect(() => {
+    void syncApplicationsFromFirebase().then(() => {
+      setApplications(getApplicationsForStudent(studentData.registrationNumber));
+    });
+    const unsub = subscribeToApplications(() => {
+      setApplications(getApplicationsForStudent(studentData.registrationNumber));
+    });
+    return () => unsub();
+  }, [studentData.registrationNumber]);
 
   const draftCount = applications.filter(a => a.status === 'DRAFT').length;
 

@@ -1,7 +1,12 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { EventApplication } from '../../types';
-import { getApplicationsForStudent, getUserNotifications } from '../../services/firebase/firestoreService';
+import {
+  getApplicationsForStudent,
+  getUserNotifications,
+  syncApplicationsFromFirebase,
+  subscribeToApplications,
+} from '../../services/firebase/firestoreService';
 import { ProgressBar } from '../../components/common/ProgressBar';
 import { Badge } from '../../components/common/Badge';
 import { Button } from '../../components/common/Button';
@@ -36,7 +41,20 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   const { currentUser, studentData } = useAuth();
   if (!currentUser || !studentData) return null;
 
-  const applications = getApplicationsForStudent(studentData.registrationNumber);
+  const [applications, setApplications] = useState<EventApplication[]>(() =>
+    getApplicationsForStudent(studentData.registrationNumber)
+  );
+
+  useEffect(() => {
+    void syncApplicationsFromFirebase().then(() => {
+      setApplications(getApplicationsForStudent(studentData.registrationNumber));
+    });
+    const unsub = subscribeToApplications(() => {
+      setApplications(getApplicationsForStudent(studentData.registrationNumber));
+    });
+    return () => unsub();
+  }, [studentData.registrationNumber]);
+
   const drafts = applications.filter(a => a.status === 'DRAFT');
   const announcements = getUserNotifications('ALL');
 

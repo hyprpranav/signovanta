@@ -11,6 +11,7 @@ import {
   createStaffAnnouncement,
   getUserNotifications,
   syncApplicationsFromFirebase,
+  subscribeToApplications,
   deleteApplication,
 } from '../../services/firebase/firestoreService';
 import { ExportManagement } from '../../components/common/ExportManagement';
@@ -28,6 +29,7 @@ import {
   updateStaffProfile,
   changeStaffPassword,
   syncStudentRegistrationRequestsFromFirebase,
+  subscribeToStudentRequests,
 } from '../../services/firebase/authService';
 import { uploadToCloudinary } from '../../services/cloudinary/cloudinaryService';
 import { Badge } from '../../components/common/Badge';
@@ -244,11 +246,24 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({ activeTab: reque
   }, [requestedTab]);
 
   useEffect(() => {
-    void Promise.all([syncApplicationsFromFirebase(), syncStudentsFromFirebase()])
-      .then(([remoteApplications, remoteStudents]) => {
+    void Promise.all([syncApplicationsFromFirebase(), syncStudentsFromFirebase(), syncStudentRegistrationRequestsFromFirebase()])
+      .then(([remoteApplications, remoteStudents, remoteRequests]) => {
         setApplications(remoteApplications.filter(a => a.status !== 'DRAFT'));
         setStudents(remoteStudents);
+        setStudentRequests(remoteRequests);
       });
+
+    const unsubApps = subscribeToApplications((remote) => {
+      setApplications(remote.filter(a => a.status !== 'DRAFT'));
+    });
+    const unsubReqs = subscribeToStudentRequests((remote) => {
+      setStudentRequests(remote);
+    });
+
+    return () => {
+      unsubApps();
+      unsubReqs();
+    };
   }, []);
 
   useEffect(() => {

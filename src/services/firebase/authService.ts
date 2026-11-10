@@ -15,6 +15,7 @@ import {
   where,
   getDocs,
   serverTimestamp,
+  onSnapshot,
 } from 'firebase/firestore';
 import { auth, db, isFirebaseConfigured } from './firebaseConfig';
 import { sanitizeForFirestore } from './firestoreService';
@@ -122,8 +123,8 @@ export function getLocalStaff(): Staff[] {
     const raw = localStorage.getItem(LOCAL_STAFF_KEY);
     if (raw) {
       const parsed: Staff[] = JSON.parse(raw);
-      const demoStaffIds = new Set(['staff-hod-ece', 'staff-ahod-ece', 'staff-fac-ece']);
-      const realStaff = parsed.filter(s => !demoStaffIds.has(s.id));
+      const demoStaffIds = new Set(['staff-hod-ece', 'staff-ahod-ece', 'staff-fac-ece', '123456']);
+      const realStaff = parsed.filter(s => !demoStaffIds.has(s.id) && !demoStaffIds.has(s.staffId));
       if (realStaff.length !== parsed.length) {
         localStorage.setItem(LOCAL_STAFF_KEY, JSON.stringify(realStaff));
       }
@@ -147,13 +148,28 @@ export async function syncStaffFromFirebase(): Promise<Staff[]> {
   if (!isFirebaseConfigured() || !db) return getLocalStaff();
   try {
     const snapshot = await getDocs(collection(db, 'staff'));
-    if (snapshot.empty) return getLocalStaff();
     const staffList = snapshot.docs.map(item => ({ id: item.id, ...item.data() })) as Staff[];
     saveLocalStaff(staffList);
     return staffList;
   } catch (error) {
     console.error('[SIGNOVANTA] Failed to load staff from Firebase', error);
     return getLocalStaff();
+  }
+}
+
+export function subscribeToStaff(callback: (staff: Staff[]) => void): () => void {
+  if (!isFirebaseConfigured() || !db) return () => {};
+  try {
+    return onSnapshot(collection(db, 'staff'), (snapshot) => {
+      const staffList = snapshot.docs.map(item => ({ id: item.id, ...item.data() })) as Staff[];
+      saveLocalStaff(staffList);
+      callback(staffList);
+    }, (error) => {
+      console.warn('[SIGNOVANTA] Staff subscription warning:', error);
+    });
+  } catch (err) {
+    console.warn('[SIGNOVANTA] Could not subscribe to staff:', err);
+    return () => {};
   }
 }
 
@@ -190,14 +206,28 @@ export async function syncStudentRegistrationRequestsFromFirebase(): Promise<Stu
 
   try {
     const snap = await getDoc(doc(db, 'systemSettings', 'student_requests'));
-    if (snap.exists() && snap.data().requests) {
+    if (snap.exists() && snap.data().requests && snap.data().requests.length > 0) {
       const remote = snap.data().requests as StudentRegistrationRequest[];
       saveStudentRegistrationRequests(remote);
       return remote;
     }
   } catch {}
 
-  return getStudentRegistrationRequests();
+  saveStudentRegistrationRequests([]);
+  return [];
+}
+
+export function subscribeToStudentRequests(callback: (requests: StudentRegistrationRequest[]) => void): () => void {
+  if (!isFirebaseConfigured() || !db) return () => {};
+  try {
+    return onSnapshot(collection(db, 'studentRegistrationRequests'), (snapshot) => {
+      const remote = snapshot.docs.map(d => ({ id: d.id, ...d.data() })) as StudentRegistrationRequest[];
+      saveStudentRegistrationRequests(remote);
+      callback(remote);
+    }, () => {});
+  } catch {
+    return () => {};
+  }
 }
 
 export async function submitStudentRegistrationRequest(data: {
