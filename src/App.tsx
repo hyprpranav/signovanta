@@ -46,7 +46,7 @@ const MainAppLayout: React.FC = () => {
   const defaultTabForUser = roleForTab === 'MASTER_ADMIN'
     ? 'overview'
     : roleForTab && ['STAFF', 'HOD', 'AHOD'].includes(roleForTab)
-    ? 'approvals'
+    ? 'dashboard'
     : 'dashboard';
 
   useEffect(() => {
@@ -199,10 +199,10 @@ const MainAppLayout: React.FC = () => {
 
   const role = currentUser.role;
   const validTabs = role === 'MASTER_ADMIN'
-    ? ['overview', 'my_profile', 'students', 'staff', 'analytics', 'approvals', 'submissions', 'announcements', 'categories', 'exports', 'issues', 'settings', 'delete_things']
+    ? ['overview', 'students', 'staff', 'analytics', 'approvals', 'submissions', 'announcements', 'categories', 'exports', 'issues', 'settings', 'delete_things']
     : ['STAFF', 'HOD', 'AHOD'].includes(role)
-    ? ['approvals', 'certificates', 'student_requests', 'submissions', 'announcements', 'my_profile', 'exports', 'analytics', 'issues', 'settings']
-    : ['dashboard', 'new_event', 'my_profile', 'applications', 'history', 'issues', 'settings'];
+    ? ['dashboard', 'submissions', 'student_requests', 'announcements', 'analytics', 'exports', 'issues', 'settings']
+    : ['dashboard', 'new_event', 'applications', 'history', 'issues', 'settings'];
   const selectedTab = validTabs.includes(currentTab)
     ? currentTab
     : defaultTabForUser;
@@ -236,69 +236,70 @@ const MainAppLayout: React.FC = () => {
           onClose={() => setIsMobileSidebarOpen(false)}
         />
 
-        {/* Main Content Area */}
-        <main className="flex-1 md:ml-64 min-w-0 p-4 sm:p-6 lg:p-8 overflow-y-auto">
-          {currentTab === 'issues' && <SupportIssuesView />}
-          {/* STUDENT DASHBOARD VIEWS */}
-          {role === 'STUDENT' && selectedTab !== 'issues' && (
-            <>
-              {selectedTab === 'dashboard' && (
-                <StudentDashboard
-                  onNewEvent={() => {
-                    setEditingDraft(null);
-                    setCurrentTab('new_event');
-                  }}
-                  onViewApplications={() => setCurrentTab('applications')}
-                  onSelectApplication={() => setCurrentTab('applications')}
-                  onOpenTeamFormation={() => setCurrentTab('teams')}
-                  onEditDraft={(draft) => {
-                    setEditingDraft(draft);
-                    setCurrentTab('new_event');
-                  }}
-                />
-              )}
-              {selectedTab === 'new_event' && (
-                <NewEventForm
-                  initialData={editingDraft}
-                  onBack={() => {
-                    setEditingDraft(null);
-                    setCurrentTab('dashboard');
-                  }}
-                  onSuccess={(app) => {
-                    setEditingDraft(null);
-                    setCurrentTab('applications');
-                  }}
-                />
-              )}
-              {selectedTab === 'my_profile' && <StudentProfileView />}
-              {(selectedTab === 'applications' || selectedTab === 'history') && (
-                <StudentApplicationsView
-                  onNewEvent={() => {
-                    setEditingDraft(null);
-                    setCurrentTab('new_event');
-                  }}
-                  onEditDraft={(draft) => {
-                    setEditingDraft(draft);
-                    setCurrentTab('new_event');
-                  }}
-                />
-              )}
-              {selectedTab === 'settings' && <StudentSettingsView />}
-            </>
-          )}
+        {/* Main Content Area with Sticky Bottom Footer */}
+        <main className="flex-1 md:ml-64 min-w-0 flex flex-col justify-between min-h-[calc(100vh-57px)] p-4 sm:p-6 lg:p-8 overflow-y-auto">
+          <div className="flex-1 w-full">
+            {currentTab === 'issues' && <SupportIssuesView />}
+            {/* STUDENT DASHBOARD VIEWS */}
+            {role === 'STUDENT' && selectedTab !== 'issues' && (
+              <>
+                {selectedTab === 'dashboard' && (
+                  <StudentDashboard
+                    onNewEvent={() => {
+                      setEditingDraft(null);
+                      setCurrentTab('new_event');
+                    }}
+                    onViewApplications={() => setCurrentTab('applications')}
+                    onSelectApplication={() => setCurrentTab('applications')}
+                    onOpenTeamFormation={() => setCurrentTab('teams')}
+                    onEditDraft={(draft) => {
+                      setEditingDraft(draft);
+                      setCurrentTab('new_event');
+                    }}
+                  />
+                )}
+                {selectedTab === 'new_event' && (
+                  <NewEventForm
+                    initialData={editingDraft}
+                    onBack={() => {
+                      setEditingDraft(null);
+                      setCurrentTab('dashboard');
+                    }}
+                    onSuccess={(app) => {
+                      setEditingDraft(null);
+                      setCurrentTab('applications');
+                    }}
+                  />
+                )}
+                {(selectedTab === 'applications' || selectedTab === 'history') && (
+                  <StudentApplicationsView
+                    onNewEvent={() => {
+                      setEditingDraft(null);
+                      setCurrentTab('new_event');
+                    }}
+                    onEditDraft={(draft) => {
+                      setEditingDraft(draft);
+                      setCurrentTab('new_event');
+                    }}
+                  />
+                )}
+                {(selectedTab === 'settings' || selectedTab === 'my_profile') && <StudentSettingsView />}
+              </>
+            )}
 
-          {/* STAFF / HOD / AHOD DASHBOARD */}
-          {['STAFF', 'HOD', 'AHOD'].includes(role) && selectedTab !== 'issues' && (
-            <StaffDashboard activeTab={selectedTab} />
-          )}
+            {/* STAFF / HOD / AHOD DASHBOARD */}
+            {['STAFF', 'HOD', 'AHOD'].includes(role) && selectedTab !== 'issues' && (
+              <StaffDashboard activeTab={selectedTab} />
+            )}
 
-          {/* MASTER ADMIN DASHBOARD */}
-          {role === 'MASTER_ADMIN' && selectedTab !== 'issues' && (
-            <AdminDashboard activeTab={selectedTab} />
-          )}
+            {/* MASTER ADMIN DASHBOARD */}
+            {role === 'MASTER_ADMIN' && selectedTab !== 'issues' && (
+              <AdminDashboard activeTab={selectedTab} />
+            )}
+          </div>
 
-          {/* Universal Dashboard Footer (HARISH PRANAV S) */}
-          <footer className="mt-12 pt-6 pb-2 border-t border-slate-200 text-xs text-slate-500 flex flex-col md:flex-row items-center justify-between gap-4">
+          {/* Universal Dashboard Footer (HARISH PRANAV S) - Glued to bottom */}
+          <footer className="mt-auto pt-8 pb-3 border-t border-slate-200/90 text-xs text-slate-500 flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-2 flex-wrap justify-center md:justify-start">
               <img src="/mkce-logo.png" alt="MKCE" className="w-5 h-5 rounded object-contain bg-white p-0.5 border border-slate-200" />
               <img src="/ece-logo.png" alt="ECE" className="w-5 h-5 rounded object-contain bg-white p-0.5 border border-slate-200" />

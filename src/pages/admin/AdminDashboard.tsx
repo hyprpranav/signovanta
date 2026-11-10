@@ -486,38 +486,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab: reque
 
   return (
     <div className="space-y-6">
-      {/* Master Admin Header */}
-      <div className="bg-slate-900 text-white rounded-3xl p-5 sm:p-7 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1.5">
-            <span className="text-xs font-bold text-purple-300 uppercase tracking-wider">
-              Central Master Admin Control • Boomika
-            </span>
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-400/30">
-              ECE 3rd Year Gateway
-            </span>
-          </div>
-          <h1 className="text-xl sm:text-2xl font-black tracking-tight">
-            Institutional Administration Panel
-          </h1>
-          <p className="text-xs text-slate-300">
-            ECE 3rd Year Student Directory (ECE A, B, C, D) • Faculty Authorizations & Workflow Oversight
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={handleExportCSV}
-            leftIcon={<Download size={14} />}
-            className="shadow-md"
-          >
-            Export Directory CSV
-          </Button>
-        </div>
-      </div>
-
       {/* Tab: Overview Metrics */}
       {activeTab === 'exports' && (
         <ExportManagement students={students} staff={staffList} applications={applications} isMasterAdmin />
@@ -846,6 +814,38 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab: reque
 
       {activeTab === 'overview' && (
         <div className="space-y-5">
+          {/* Master Admin Header */}
+          <div className="bg-slate-900 text-white rounded-3xl p-5 sm:p-7 shadow-lg flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-1.5">
+                <span className="text-xs font-bold text-purple-300 uppercase tracking-wider">
+                  Central Master Admin Control • Boomika
+                </span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-400/30">
+                  ECE 3rd Year Gateway
+                </span>
+              </div>
+              <h1 className="text-xl sm:text-2xl font-black tracking-tight">
+                Institutional Administration Panel
+              </h1>
+              <p className="text-xs text-slate-300">
+                ECE 3rd Year Student Directory (ECE A, B, C, D) • Faculty Authorizations & Workflow Oversight
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleExportCSV}
+                leftIcon={<Download size={14} />}
+                className="shadow-md"
+              >
+                Export Directory CSV
+              </Button>
+            </div>
+          </div>
+
           {/* Top 5 Metrics */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             <div className="bg-white p-4 rounded-2xl border border-slate-200">

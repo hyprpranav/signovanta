@@ -87,7 +87,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const studentNav: NavItem[] = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'new_event', label: 'New Event', icon: PlusCircle, highlight: true },
-    { id: 'my_profile', label: 'My Profile', icon: User },
     { id: 'applications', label: 'My Applications', icon: FileText, notificationCount: notifications.studentNotifications },
     { id: 'history', label: 'Event History', icon: History },
     { id: 'issues', label: 'Facing Issues?', icon: AlertCircle },
@@ -96,12 +95,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   // Staff Nav Items (Shared across STAFF, HOD, AHOD - NO delete_things)
   const staffNav: NavItem[] = [
-    { id: 'approvals', label: 'Pre-Event Approvals (50%)', icon: CheckSquare, notificationCount: notifications.pendingSubmissions },
-    { id: 'certificates', label: 'Certificate Verification (100%)', icon: FileCheck, notificationCount: notifications.pendingCertificates },
-    { id: 'student_requests', label: 'Student Registration Requests', icon: GraduationCap, notificationCount: notifications.pendingRegistrations },
-    { id: 'submissions', label: 'Submissions Directory', icon: FileText },
+    { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+    { id: 'submissions', label: 'Submissions', icon: FileText, notificationCount: notifications.pendingSubmissions + notifications.pendingCertificates },
+    { id: 'student_requests', label: 'Student Requests', icon: GraduationCap, notificationCount: notifications.pendingRegistrations },
     { id: 'announcements', label: 'Announcements', icon: Bell },
-    { id: 'my_profile', label: 'Staff Profile', icon: User },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'exports', label: 'Exports', icon: BarChart3 },
     { id: 'issues', label: 'Facing Issues?', icon: AlertCircle, notificationCount: notifications.unresolvedIssues },
@@ -111,7 +108,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
   // Master Admin Nav Items
   const adminNav: NavItem[] = [
     { id: 'overview', label: 'Control Center', icon: LayoutDashboard },
-    { id: 'my_profile', label: 'Admin Profile', icon: User },
     { id: 'students', label: 'Student Management', icon: GraduationCap, highlight: true },
     { id: 'staff', label: 'Staff & Role Requests', icon: Briefcase, notificationCount: notifications.pendingStaff },
     { id: 'approvals', label: 'Registration Approvals', icon: CheckSquare, notificationCount: notifications.pendingRegistrations },

@@ -50,6 +50,9 @@ import {
   Save,
   Bell,
   Send,
+  LayoutDashboard,
+  FileText,
+  ArrowRight,
 } from 'lucide-react';
 
 interface StaffDashboardProps {
@@ -58,7 +61,8 @@ interface StaffDashboardProps {
 
 export const StaffDashboard: React.FC<StaffDashboardProps> = ({ activeTab: requestedTab }) => {
   const { currentUser, staffData } = useAuth();
-  const [activeTab, setActiveTab] = useState<'approvals' | 'certificates' | 'student_requests' | 'announcements' | 'exports' | 'analytics' | 'submissions' | 'my_profile' | 'settings'>('approvals');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'submissions' | 'student_requests' | 'announcements' | 'exports' | 'analytics' | 'settings'>('dashboard');
+  const [submissionsSubTab, setSubmissionsSubTab] = useState<'pre_approvals' | 'certificates' | 'all'>('pre_approvals');
   const [applications, setApplications] = useState<EventApplication[]>(() =>
     getAllApplications().filter(a => a.status !== 'DRAFT')
   );
@@ -155,20 +159,20 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({ activeTab: reque
   };
 
   useEffect(() => {
-    const tabMap: Record<string, typeof activeTab> = {
-      approvals: 'approvals',
-      pre_approvals: 'approvals',
-      certificates: 'certificates',
-      certificate_verification: 'certificates',
-      student_requests: 'student_requests',
-      submissions: 'submissions',
-      announcements: 'announcements',
-      my_profile: 'my_profile',
-      exports: 'exports',
-      analytics: 'analytics',
-      settings: 'settings',
-    };
-    if (requestedTab && tabMap[requestedTab]) setActiveTab(tabMap[requestedTab]);
+    if (!requestedTab) return;
+    if (requestedTab === 'approvals' || requestedTab === 'pre_approvals') {
+      setActiveTab('submissions');
+      setSubmissionsSubTab('pre_approvals');
+    } else if (requestedTab === 'certificates' || requestedTab === 'certificate_verification') {
+      setActiveTab('submissions');
+      setSubmissionsSubTab('certificates');
+    } else if (requestedTab === 'submissions') {
+      setActiveTab('submissions');
+    } else if (requestedTab === 'my_profile') {
+      setActiveTab('settings');
+    } else if (['dashboard', 'student_requests', 'announcements', 'exports', 'analytics', 'settings'].includes(requestedTab)) {
+      setActiveTab(requestedTab as any);
+    }
   }, [requestedTab]);
 
   useEffect(() => {
@@ -279,53 +283,181 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({ activeTab: reque
 
   return (
     <div className="space-y-6">
-      {/* Dynamic Role Header Banner */}
-      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-blue-950 text-white rounded-3xl p-5 sm:p-7 shadow-lg">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-blue-300 uppercase tracking-wider">
-                Staff & Department Oversight
-              </span>
-              <Badge role={role} size="sm" />
-            </div>
-            <h1 className="text-xl sm:text-2xl font-black tracking-tight">
-              Welcome, {staffData.fullName}
-            </h1>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-300 font-medium">
-              <span className="bg-white/10 px-2 py-0.5 rounded font-bold text-white">
-                Role: {role}
-              </span>
-              <span>•</span>
-              <span>Department: {staffData.department}</span>
-              <span>•</span>
-              <span>Staff ID: {staffData.staffId}</span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-            {[
-              ['Students', students.length, 'bg-blue-600'],
-              ['Pre-Approval Queue', preApprovalQueue.length, 'bg-amber-500'],
-              ['Certificates to Verify', certificateVerificationQueue.length, 'bg-purple-600'],
-              ['Completed', completedList.length, 'bg-emerald-600'],
-              ['Winning Students', new Set(applications.filter(app => app.prizeWon).map(app => app.studentRegNo)).size, 'bg-amber-600'],
-            ].map(([label, value, color]) => (
-              <div key={String(label)} className={`${color} rounded-2xl p-4 text-white shadow-sm`}>
-                <span className="text-[11px] font-bold uppercase tracking-wider text-white/80">{label}</span>
-                <strong className="block text-2xl font-black mt-1">{value}</strong>
-                <span className="text-[11px] text-white/80">Live database count</span>
+      {/* 1. Tab: Dashboard Overview */}
+      {activeTab === 'dashboard' && (
+        <div className="space-y-6">
+          {/* Dynamic Role Header Banner */}
+          <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-blue-950 text-white rounded-3xl p-5 sm:p-7 shadow-lg">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-blue-300 uppercase tracking-wider">
+                    Staff & Department Oversight
+                  </span>
+                  <Badge role={role} size="sm" />
+                </div>
+                <h1 className="text-xl sm:text-2xl font-black tracking-tight">
+                  Welcome, {staffData.fullName}
+                </h1>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-300 font-medium">
+                  <span className="bg-white/10 px-2 py-0.5 rounded font-bold text-white">
+                    Role: {role}
+                  </span>
+                  <span>•</span>
+                  <span>Department: {staffData.department}</span>
+                  <span>•</span>
+                  <span>Staff ID: {staffData.staffId}</span>
+                </div>
               </div>
-            ))}
+
+              <div className="flex items-center gap-2">
+                <span className="text-xs bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 px-3 py-1.5 rounded-full font-bold">
+                  ✓ Active Authenticated Session
+                </span>
+              </div>
+            </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="text-xs bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 px-3 py-1.5 rounded-full font-bold">
-              ✓ Active Authenticated Session
-            </span>
+          {/* 5 Live Database Count Metric Cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+            <div className="bg-blue-600 rounded-2xl p-4 text-white shadow-sm">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-white/80">Students</span>
+              <strong className="block text-2xl font-black mt-1">{students.length}</strong>
+              <span className="text-[11px] text-white/80">3rd Year ECE</span>
+            </div>
+
+            <div
+              onClick={() => {
+                setActiveTab('submissions');
+                setSubmissionsSubTab('pre_approvals');
+              }}
+              className="bg-amber-500 rounded-2xl p-4 text-white shadow-sm cursor-pointer hover:bg-amber-600 transition-colors"
+            >
+              <span className="text-[11px] font-bold uppercase tracking-wider text-white/80">Pre-Approval Queue</span>
+              <strong className="block text-2xl font-black mt-1">{preApprovalQueue.length}</strong>
+              <span className="text-[11px] text-white/80">50% Verification →</span>
+            </div>
+
+            <div
+              onClick={() => {
+                setActiveTab('submissions');
+                setSubmissionsSubTab('certificates');
+              }}
+              className="bg-purple-600 rounded-2xl p-4 text-white shadow-sm cursor-pointer hover:bg-purple-700 transition-colors"
+            >
+              <span className="text-[11px] font-bold uppercase tracking-wider text-white/80">Certificates to Verify</span>
+              <strong className="block text-2xl font-black mt-1">{certificateVerificationQueue.length}</strong>
+              <span className="text-[11px] text-white/80">100% Verification →</span>
+            </div>
+
+            <div
+              onClick={() => {
+                setActiveTab('submissions');
+                setSubmissionsSubTab('all');
+              }}
+              className="bg-emerald-600 rounded-2xl p-4 text-white shadow-sm cursor-pointer hover:bg-emerald-700 transition-colors"
+            >
+              <span className="text-[11px] font-bold uppercase tracking-wider text-white/80">Completed</span>
+              <strong className="block text-2xl font-black mt-1">{completedList.length}</strong>
+              <span className="text-[11px] text-white/80">Verified Events →</span>
+            </div>
+
+            <div
+              onClick={() => setActiveTab('analytics')}
+              className="bg-amber-600 rounded-2xl p-4 text-white shadow-sm cursor-pointer hover:bg-amber-700 transition-colors"
+            >
+              <span className="text-[11px] font-bold uppercase tracking-wider text-white/80">Winning Students</span>
+              <strong className="block text-2xl font-black mt-1">
+                {new Set(applications.filter(app => app.prizeWon).map(app => app.studentRegNo)).size}
+              </strong>
+              <span className="text-[11px] text-white/80">View Analytics →</span>
+            </div>
           </div>
+
+          {/* Quick Action Navigation Grid */}
+          <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs space-y-3">
+            <h3 className="text-sm font-bold text-slate-900">Faculty Workspace Controls</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('submissions');
+                  setSubmissionsSubTab('pre_approvals');
+                }}
+                className="flex items-center justify-between p-3.5 bg-amber-50 hover:bg-amber-100/70 border border-amber-200/80 rounded-2xl text-left transition-all cursor-pointer"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="p-2 bg-amber-500 text-white rounded-xl">
+                    <CheckSquare size={16} />
+                  </span>
+                  <div>
+                    <span className="text-xs font-bold text-amber-950 block">Pre-Approvals (50%)</span>
+                    <span className="text-[11px] text-amber-700 font-semibold">{preApprovalQueue.length} pending review</span>
+                  </div>
+                </div>
+                <ArrowRight size={14} className="text-amber-800" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('submissions');
+                  setSubmissionsSubTab('certificates');
+                }}
+                className="flex items-center justify-between p-3.5 bg-purple-50 hover:bg-purple-100/70 border border-purple-200/80 rounded-2xl text-left transition-all cursor-pointer"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="p-2 bg-purple-600 text-white rounded-xl">
+                    <FileCheck size={16} />
+                  </span>
+                  <div>
+                    <span className="text-xs font-bold text-purple-950 block">Certificates (100%)</span>
+                    <span className="text-[11px] text-purple-700 font-semibold">{certificateVerificationQueue.length} pending check</span>
+                  </div>
+                </div>
+                <ArrowRight size={14} className="text-purple-800" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('student_requests')}
+                className="flex items-center justify-between p-3.5 bg-blue-50 hover:bg-blue-100/70 border border-blue-200/80 rounded-2xl text-left transition-all cursor-pointer"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="p-2 bg-blue-600 text-white rounded-xl">
+                    <GraduationCap size={16} />
+                  </span>
+                  <div>
+                    <span className="text-xs font-bold text-blue-950 block">Student Requests</span>
+                    <span className="text-[11px] text-blue-700 font-semibold">{studentRequests.filter(r => r.status === 'PENDING').length} awaiting</span>
+                  </div>
+                </div>
+                <ArrowRight size={14} className="text-blue-800" />
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('announcements')}
+                className="flex items-center justify-between p-3.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-2xl text-left transition-all cursor-pointer"
+              >
+                <div className="flex items-center gap-3">
+                  <span className="p-2 bg-slate-800 text-white rounded-xl">
+                    <Megaphone size={16} />
+                  </span>
+                  <div>
+                    <span className="text-xs font-bold text-slate-900 block">Post Announcement</span>
+                    <span className="text-[11px] text-slate-500 font-semibold">Broadcast message</span>
+                  </div>
+                </div>
+                <ArrowRight size={14} className="text-slate-700" />
+              </button>
+            </div>
+          </div>
+
+          {/* Department Analytics summary */}
+          <EventParticipationAnalytics students={students} applications={applications} isStaffOrAdminView />
         </div>
-      </div>
+      )}
 
       {activeTab === 'exports' && (
         <ExportManagement students={students} staff={[]} applications={applications} />
@@ -377,15 +509,85 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({ activeTab: reque
         </div>
       )}
 
-      {/* Tab 1: Pre-Approval Queue (50% stage) */}
-      {activeTab === 'approvals' && (
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-bold text-slate-900">
-              Pre-Event Verification Queue (Grants 50% Progress)
-            </h2>
-            <span className="text-xs text-slate-500">{preApprovalQueue.length} pending review</span>
+      {/* Tab: Submissions Hub (50% Pre-Approvals, 100% Certificate Verification, All Submissions) */}
+      {activeTab === 'submissions' && (
+        <div className="space-y-6">
+          {/* Submissions Hub Sub-Nav Tabs */}
+          <div className="bg-white p-2 rounded-2xl border border-slate-200/80 shadow-xs flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => setSubmissionsSubTab('pre_approvals')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                submissionsSubTab === 'pre_approvals'
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+              }`}
+            >
+              <CheckSquare size={15} />
+              <span>50% Pre-Approval Requests</span>
+              {preApprovalQueue.length > 0 && (
+                <span
+                  className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
+                    submissionsSubTab === 'pre_approvals' ? 'bg-amber-400 text-slate-900' : 'bg-amber-500 text-white'
+                  }`}
+                >
+                  {preApprovalQueue.length}
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSubmissionsSubTab('certificates')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                submissionsSubTab === 'certificates'
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+              }`}
+            >
+              <FileCheck size={15} />
+              <span>100% Certificate Verification</span>
+              {certificateVerificationQueue.length > 0 && (
+                <span
+                  className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
+                    submissionsSubTab === 'certificates' ? 'bg-purple-400 text-white' : 'bg-purple-600 text-white'
+                  }`}
+                >
+                  {certificateVerificationQueue.length}
+                </span>
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSubmissionsSubTab('all')}
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                submissionsSubTab === 'all'
+                  ? 'bg-slate-900 text-white shadow-xs'
+                  : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+              }`}
+            >
+              <FileText size={15} />
+              <span>All Submissions & Completed Events</span>
+              <span
+                className={`px-1.5 py-0.5 rounded-full text-[10px] font-black ${
+                  submissionsSubTab === 'all' ? 'bg-slate-700 text-white' : 'bg-slate-200 text-slate-700'
+                }`}
+              >
+                {applications.length}
+              </span>
+            </button>
           </div>
+
+          {/* Submissions Sub-Tab 1: Pre-Approval Queue (50% stage) */}
+          {submissionsSubTab === 'pre_approvals' && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-base font-bold text-slate-900">
+                  Pre-Event Verification Queue (Grants 50% Progress)
+                </h2>
+                <span className="text-xs text-slate-500">{preApprovalQueue.length} pending review</span>
+              </div>
 
           {preApprovalQueue.length === 0 ? (
             <div className="bg-white rounded-3xl border border-slate-200 p-12 text-center text-slate-400">
@@ -488,8 +690,8 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({ activeTab: reque
         </div>
       )}
 
-      {/* Tab 2: Certificate Verification (100% stage) */}
-      {activeTab === 'certificates' && (
+      {/* Submissions Sub-Tab 2: Certificate Verification (100% stage) */}
+      {submissionsSubTab === 'certificates' && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-bold text-slate-900">
@@ -617,6 +819,53 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({ activeTab: reque
         </div>
       )}
 
+      {/* Submissions Sub-Tab 3: All Submissions & Completed Events Directory */}
+      {submissionsSubTab === 'all' && (
+        <SubmissionsPanel
+          applications={applications}
+          editorUid={currentUser?.uid || 'staff-user'}
+          editorName={currentUser?.displayName || 'Staff'}
+          editorRole={currentUser?.role || 'STAFF'}
+          onUpdate={updated => setApplications(current => current.map(item => item.id === updated.id ? updated : item))}
+          onEnableStudentEdit={application => {
+            try {
+              const updated = enableStudentApplicationEditing(
+                application.id,
+                currentUser?.uid || 'staff-user',
+                currentUser?.displayName || 'Staff',
+                currentUser?.role || 'STAFF'
+              );
+              setApplications(current => current.map(item => item.id === updated.id ? updated : item));
+            } catch (error) {
+              alert(error instanceof Error ? error.message : 'Unable to enable student editing.');
+            }
+          }}
+          onComplete={application => {
+            setSelectedApp(application);
+            setActionType('complete');
+          }}
+          onApprove={application => {
+            setSelectedApp(application);
+            setActionType('pre_approve');
+          }}
+          onReject={application => {
+            setSelectedApp(application);
+            setActionType('reject');
+          }}
+          onDelete={async application => {
+            if (!window.confirm(`Delete the rejected submission "${application.eventName}"?`)) return;
+            try {
+              await deleteApplication(application.id);
+              setApplications(current => current.filter(item => item.id !== application.id));
+            } catch (error) {
+              alert(error instanceof Error ? error.message : 'Deletion failed.');
+            }
+          }}
+        />
+      )}
+    </div>
+  )}
+
       {/* Tab: Analytics */}
       {activeTab === 'analytics' && (
         <div className="space-y-6">
@@ -694,7 +943,7 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({ activeTab: reque
       )}
 
       {/* Tab: Staff Profile & Security Settings */}
-      {(activeTab === 'my_profile' || activeTab === 'settings') && (
+      {activeTab === 'settings' && (
         <div className="space-y-6 max-w-4xl mx-auto">
           {/* Header Banner */}
           <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center sm:items-start gap-5">
@@ -930,50 +1179,6 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({ activeTab: reque
             </form>
           </div>
         </div>
-      )}
-
-      {activeTab === 'submissions' && (
-        <SubmissionsPanel
-          applications={applications}
-          editorUid={currentUser?.uid || 'staff-user'}
-          editorName={currentUser?.displayName || 'Staff'}
-          editorRole={currentUser?.role || 'STAFF'}
-          onUpdate={updated => setApplications(current => current.map(item => item.id === updated.id ? updated : item))}
-          onEnableStudentEdit={application => {
-            try {
-              const updated = enableStudentApplicationEditing(
-                application.id,
-                currentUser?.uid || 'staff-user',
-                currentUser?.displayName || 'Staff',
-                currentUser?.role || 'STAFF'
-              );
-              setApplications(current => current.map(item => item.id === updated.id ? updated : item));
-            } catch (error) {
-              alert(error instanceof Error ? error.message : 'Unable to enable student editing.');
-            }
-          }}
-          onComplete={application => {
-            setSelectedApp(application);
-            setActionType('complete');
-          }}
-          onApprove={application => {
-            setSelectedApp(application);
-            setActionType('pre_approve');
-          }}
-          onReject={application => {
-            setSelectedApp(application);
-            setActionType('reject');
-          }}
-          onDelete={async application => {
-            if (!window.confirm(`Delete the rejected submission "${application.eventName}"?`)) return;
-            try {
-              await deleteApplication(application.id);
-              setApplications(current => current.filter(item => item.id !== application.id));
-            } catch (error) {
-              alert(error instanceof Error ? error.message : 'Deletion failed.');
-            }
-          }}
-        />
       )}
 
       {/* Review Confirmation Modal */}
