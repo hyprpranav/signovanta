@@ -74,7 +74,7 @@ export const PostEventSubmissionModal: React.FC<PostEventSubmissionModalProps> =
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
@@ -115,7 +115,7 @@ export const PostEventSubmissionModal: React.FC<PostEventSubmissionModalProps> =
         }
       }
 
-      const updated = submitPostEventDocuments(application.id, payload);
+      const updated = await submitPostEventDocuments(application.id, payload);
 
       onSuccess(updated);
       onClose();

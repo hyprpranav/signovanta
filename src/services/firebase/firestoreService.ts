@@ -58,12 +58,11 @@ export function sanitizeForFirestore<T>(data: T): T {
   return data;
 }
 
-function mirrorToFirebase(collectionName: string, id: string, data: object): void {
+export async function mirrorToFirebase(collectionName: string, id: string, data: object): Promise<void> {
   if (!isFirebaseConfigured() || !db) return;
   try {
     const cleanData = sanitizeForFirestore(data);
-    void setDoc(doc(db, collectionName, id), { ...cleanData, updatedAt: serverTimestamp() }, { merge: true })
-      .catch(error => console.warn(`[SIGNOVANTA] Failed to save ${collectionName}/${id} in Firebase:`, error));
+    await setDoc(doc(db, collectionName, id), { ...cleanData, updatedAt: serverTimestamp() }, { merge: true });
   } catch (error) {
     console.warn(`[SIGNOVANTA] Error mirroring ${collectionName}/${id} to Firebase:`, error);
   }
@@ -232,10 +231,10 @@ export function getApplicationById(id: string): EventApplication | null {
   return all.find(a => a.id === id) || null;
 }
 
-export function createApplication(
+export async function createApplication(
   data: Omit<EventApplication, 'id' | 'applicationNumber' | 'createdAt' | 'updatedAt' | 'progressPercent'>,
   isDraft = false
-): EventApplication {
+): Promise<EventApplication> {
   const all = getAllApplications();
   const count = all.length + 1;
   const year = new Date().getFullYear();
@@ -256,10 +255,10 @@ export function createApplication(
   const finalApp = sanitizeForFirestore(newApp);
   all.unshift(finalApp);
   saveAllApplications(all);
-  mirrorToFirebase('eventApplications', finalApp.id, finalApp);
+  await mirrorToFirebase('eventApplications', finalApp.id, finalApp);
 
   // Create audit log
-  createApprovalLog({
+  void createApprovalLog({
     applicationId: finalApp.id,
     applicationNumber: finalApp.applicationNumber,
     action: 'SUBMITTED',
@@ -272,10 +271,10 @@ export function createApplication(
   return finalApp;
 }
 
-export function updateApplication(
+export async function updateApplication(
   id: string,
   updates: Partial<EventApplication>
-): EventApplication {
+): Promise<EventApplication> {
   const all = getAllApplications();
   const idx = all.findIndex(a => a.id === id);
   if (idx === -1) throw new Error('Application not found');
@@ -291,24 +290,24 @@ export function updateApplication(
   const finalApp = sanitizeForFirestore(updated);
   all[idx] = finalApp;
   saveAllApplications(all);
-  mirrorToFirebase('eventApplications', finalApp.id, finalApp);
+  await mirrorToFirebase('eventApplications', finalApp.id, finalApp);
   return finalApp;
 }
 
-export function editCompletedApplication(
+export async function editCompletedApplication(
   applicationId: string,
   updates: Pick<EventApplication, 'studentName' | 'eventName' | 'eventCategory' | 'organizerName' | 'institutionName' | 'eventLocation' | 'startDate' | 'endDate' | 'eventMode' | 'eventWebsite' | 'registrationLink' | 'eventDescription' | 'parentGuardianName' | 'parentGuardianMobile' | 'guideName' | 'participationType' | 'teamName' | 'teamSize' | 'teamMembers' | 'facultyCoordinator'>,
   editorUid: string,
   editorName: string,
   editorRole: UserRole
-): EventApplication {
+): Promise<EventApplication> {
   const app = getApplicationById(applicationId);
   if (!app) throw new Error('Application not found');
   if (app.status !== 'COMPLETED') {
     throw new Error('This application can only be edited after 100% approval.');
   }
 
-  const updated = updateApplication(applicationId, updates);
+  const updated = await updateApplication(applicationId, updates);
   createApprovalLog({
     applicationId: app.id,
     applicationNumber: app.applicationNumber,
@@ -321,19 +320,19 @@ export function editCompletedApplication(
   return updated;
 }
 
-export function enableStudentApplicationEditing(
+export async function enableStudentApplicationEditing(
   applicationId: string,
   editorUid: string,
   editorName: string,
   editorRole: UserRole
-): EventApplication {
+): Promise<EventApplication> {
   const app = getApplicationById(applicationId);
   if (!app) throw new Error('Application not found');
   if (app.status !== 'COMPLETED') {
     throw new Error('Student editing can only be enabled after 100% approval.');
   }
 
-  const updated = updateApplication(applicationId, {
+  const updated = await updateApplication(applicationId, {
     studentEditEnabledAt: new Date().toISOString(),
     studentEditEnabledBy: editorUid,
     studentEditEnabledByName: editorName,
@@ -360,17 +359,17 @@ export function enableStudentApplicationEditing(
 /**
  * Pre-Event Staff / HOD Approval (sets progress to 50%)
  */
-export function preApproveApplication(
+export async function preApproveApplication(
   applicationId: string,
   reviewerUid: string,
   reviewerName: string,
   reviewerRole: UserRole,
   remarks: string
-): EventApplication {
+): Promise<EventApplication> {
   const app = getApplicationById(applicationId);
   if (!app) throw new Error('Application not found');
 
-  const updated = updateApplication(applicationId, {
+  const updated = await updateApplication(applicationId, {
     status: 'PRE_APPROVED',
     progressPercent: 50,
     preApprovedBy: reviewerUid,
@@ -404,18 +403,18 @@ export function preApproveApplication(
 /**
  * Request Correction from Student
  */
-export function requestCorrectionApplication(
+export async function requestCorrectionApplication(
   applicationId: string,
   reviewerUid: string,
   reviewerName: string,
   reviewerRole: UserRole,
   remarks: string
-): EventApplication {
+): Promise<EventApplication> {
   const app = getApplicationById(applicationId);
   if (!app) throw new Error('Application not found');
   if (!remarks) throw new Error('Please provide specific remarks for the required correction.');
 
-  const updated = updateApplication(applicationId, {
+  const updated = await updateApplication(applicationId, {
     status: 'CORRECTION_REQUIRED',
     correctionRemarks: remarks,
   });
@@ -444,18 +443,18 @@ export function requestCorrectionApplication(
 /**
  * Reject Application
  */
-export function rejectApplication(
+export async function rejectApplication(
   applicationId: string,
   reviewerUid: string,
   reviewerName: string,
   reviewerRole: UserRole,
   remarks: string
-): EventApplication {
+): Promise<EventApplication> {
   const app = getApplicationById(applicationId);
   if (!app) throw new Error('Application not found');
   if (!remarks) throw new Error('Please specify the reason for rejection.');
 
-  const updated = updateApplication(applicationId, {
+  const updated = await updateApplication(applicationId, {
     status: 'REJECTED',
     rejectionRemarks: remarks,
   });
@@ -484,7 +483,7 @@ export function rejectApplication(
 /**
  * Student Post-Event Document Submission (Progress stays at 50% until staff verifies)
  */
-export function submitPostEventDocuments(
+export async function submitPostEventDocuments(
   applicationId: string,
   data: {
     actualParticipationDetails: string;
@@ -497,7 +496,7 @@ export function submitPostEventDocuments(
     winnerCertUrl?: string;
     eventPhotoUrls?: string[];
   }
-): EventApplication {
+): Promise<EventApplication> {
   const app = getApplicationById(applicationId);
   if (!app) throw new Error('Application not found');
 
@@ -512,7 +511,7 @@ export function submitPostEventDocuments(
     Object.entries(data).filter(([, value]) => value !== undefined)
   ) as Partial<EventApplication>;
 
-  const updated = updateApplication(applicationId, {
+  const updated = await updateApplication(applicationId, {
     ...cleanData,
     status: 'CERTIFICATE_SUBMITTED',
     postEventSubmittedAt: new Date().toISOString(),
@@ -536,20 +535,20 @@ export function submitPostEventDocuments(
 /**
  * Final Staff / HOD Verification (marks progress as 100% COMPLETED)
  */
-export function completeEventApplication(
+export async function completeEventApplication(
   applicationId: string,
   verifierUid: string,
   verifierName: string,
   verifierRole: UserRole,
   remarks: string
-): EventApplication {
+): Promise<EventApplication> {
   const app = getApplicationById(applicationId);
   if (!app) throw new Error('Application not found');
   if (!app.participationCertUrl || (app.prizeWon && !app.winnerCertUrl)) {
     throw new Error('Required certificates must be submitted before final verification.');
   }
 
-  const updated = updateApplication(applicationId, {
+  const updated = await updateApplication(applicationId, {
     status: 'COMPLETED',
     progressPercent: 100,
     completedAt: new Date().toISOString(),
@@ -569,10 +568,10 @@ export function completeEventApplication(
 
   createNotification({
     userId: app.studentId,
-    title: 'Event Completed (100% Progress)',
-    message: `Congratulations! Your certificates for "${app.eventName}" have been verified by ${verifierName}.`,
+    title: 'Event Completed (100% Verified)',
+    message: `Your event submission for "${app.eventName}" was verified by ${verifierName} (${verifierRole})! 100% completion verified.`,
     type: 'SUCCESS',
-    linkUrl: `/student/certificates`,
+    linkUrl: `/student/applications`,
   });
 
   return updated;

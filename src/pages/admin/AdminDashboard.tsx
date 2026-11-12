@@ -22,6 +22,7 @@ import {
   updateStudentProfile,
   updateMasterAdminProfile,
   syncStudentRegistrationRequestsFromFirebase,
+  subscribeToStudents,
   subscribeToStaff,
   subscribeToStudentRequests,
 } from '../../services/firebase/authService';
@@ -93,7 +94,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab: reque
   const { currentUser } = useAuth();
 
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'my_profile' | 'students' | 'staff' | 'approvals' | 'submissions' | 'events' | 'categories' | 'analytics' | 'exports' | 'announcements' | 'settings' | 'delete_things'
+    'overview' | 'my_profile' | 'students' | 'staff' | 'approvals' | 'submissions' | 'events' | 'categories' | 'analytics' | 'exports' | 'announcements' | 'settings'
   >('overview');
 
   const [students, setStudents] = useState<Student[]>(() => getLocalStudents());
@@ -256,7 +257,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab: reque
       'exports',
       'announcements',
       'settings',
-      'delete_things',
     ]);
     if (requestedTab && allowedTabs.has(requestedTab)) {
       setActiveTab(requestedTab as typeof activeTab);
@@ -279,6 +279,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab: reque
     const unsubApps = subscribeToApplications((remote) => {
       setApplications(remote.filter(a => a.status !== 'DRAFT'));
     });
+    const unsubStudents = subscribeToStudents((remote) => {
+      setStudents(remote);
+    });
     const unsubStaff = subscribeToStaff((remote) => {
       setStaffList(remote);
     });
@@ -288,6 +291,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab: reque
 
     return () => {
       unsubApps();
+      unsubStudents();
       unsubStaff();
       unsubReqs();
     };
@@ -1157,14 +1161,6 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab: reque
         </div>
       )}
 
-      {activeTab === 'delete_things' && (
-        <DeleteThingsPanel
-          students={students}
-          staff={staffList}
-          onRequestStudentDelete={setDeleteTarget}
-        />
-      )}
-
       {activeTab === 'submissions' && (
         <SubmissionsPanel
           applications={applications}
@@ -1172,9 +1168,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab: reque
           editorName={currentUser?.displayName || 'Master Admin'}
           editorRole="MASTER_ADMIN"
           onUpdate={updated => setApplications(current => current.map(item => item.id === updated.id ? updated : item))}
-          onEnableStudentEdit={application => {
+          onEnableStudentEdit={async application => {
             try {
-              const updated = enableStudentApplicationEditing(
+              const updated = await enableStudentApplicationEditing(
                 application.id,
                 currentUser?.uid || 'master-admin',
                 currentUser?.displayName || 'Master Admin',
@@ -1185,9 +1181,9 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab: reque
               alert(error instanceof Error ? error.message : 'Unable to enable student editing.');
             }
           }}
-          onApprove={application => {
+          onApprove={async application => {
             try {
-              const updated = preApproveApplication(
+              const updated = await preApproveApplication(
                 application.id,
                 currentUser?.uid || 'master-admin',
                 currentUser?.displayName || 'Master Admin',
@@ -1199,11 +1195,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab: reque
               alert(error instanceof Error ? error.message : 'Approval failed.');
             }
           }}
-          onComplete={application => {
+          onComplete={async application => {
             const remarks = window.prompt('Final verification remarks:');
             if (remarks === null) return;
             try {
-              const updated = completeEventApplication(
+              const updated = await completeEventApplication(
                 application.id,
                 currentUser?.uid || 'master-admin',
                 currentUser?.displayName || 'Master Admin',
@@ -1215,11 +1211,11 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab: reque
               alert(error instanceof Error ? error.message : 'Final verification failed.');
             }
           }}
-          onReject={application => {
+          onReject={async application => {
             const remarks = window.prompt('Reason for rejecting this submission:');
             if (remarks === null) return;
             try {
-              const updated = rejectApplication(
+              const updated = await rejectApplication(
                 application.id,
                 currentUser?.uid || 'master-admin',
                 currentUser?.displayName || 'Master Admin',

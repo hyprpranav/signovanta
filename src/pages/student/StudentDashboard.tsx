@@ -22,6 +22,7 @@ import {
   ChevronRight,
   Sparkles,
   Megaphone,
+  Pencil,
 } from 'lucide-react';
 
 interface StudentDashboardProps {
@@ -284,6 +285,27 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 />
 
                 {/* Status-specific action notes */}
+                {app.status === 'DRAFT' && (
+                  <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-3 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
+                    <div>
+                      <span className="font-bold block">Saved in Drafts (Private)</span>
+                      <span className="text-[11px] text-amber-700">This draft will NOT show to staff or admin for approval until you submit it.</span>
+                    </div>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onEditDraft && onEditDraft(app);
+                      }}
+                      className="bg-amber-600 hover:bg-amber-700 text-white font-bold cursor-pointer shrink-0"
+                      leftIcon={<Pencil size={14} />}
+                    >
+                      Open & Edit Draft
+                    </Button>
+                  </div>
+                )}
+
                 {app.status === 'PRE_APPROVED' && (
                   <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 rounded-xl p-3 text-xs flex items-center justify-between">
                     <span>Pre-approval granted! Once you attend, upload your certificate to complete 100%.</span>

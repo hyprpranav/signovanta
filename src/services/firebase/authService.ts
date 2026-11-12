@@ -116,6 +116,24 @@ export async function syncStudentsFromFirebase(): Promise<Student[]> {
   }
 }
 
+export function subscribeToStudents(callback: (students: Student[]) => void): () => void {
+  if (!isFirebaseConfigured() || !db) return () => {};
+  try {
+    return onSnapshot(collection(db, 'students'), (snapshot) => {
+      const students = snapshot.docs.map(item => ({ id: item.id, ...item.data() })) as Student[];
+      if (students.length > 0) {
+        saveLocalStudents(students);
+        callback(students);
+      }
+    }, (error) => {
+      console.warn('[SIGNOVANTA] Students subscription warning:', error);
+    });
+  } catch (err) {
+    console.warn('[SIGNOVANTA] Could not subscribe to students:', err);
+    return () => {};
+  }
+}
+
 const DEFAULT_ECE_STAFF: Staff[] = [];
 
 export function getLocalStaff(): Staff[] {
@@ -413,6 +431,7 @@ export async function studentLogin(registrationNumber: string, passwordInput: st
         }
 
         const email = regNoToEmail(normReg);
+        let firebaseUid = student.uid || '';
 
         // If first login: initial password is the registration number
         if (!student.hasSetPassword) {
@@ -420,20 +439,39 @@ export async function studentLogin(registrationNumber: string, passwordInput: st
             throw new Error('Initial password must match your Registration Number exactly.');
           }
 
-          const firstLoginAt = new Date().toISOString();
-          try {
-            await updateDoc(doc(db, 'students', student.id), {
-              isActivated: true,
-              status: 'ACTIVE',
-              lastLoginAt: serverTimestamp(),
-              updatedAt: serverTimestamp(),
-            });
-          } catch (activationError) {
-            console.warn('[AuthService] Could not persist first-login activation to Firebase:', activationError);
+          if (isFirebaseConfigured() && auth) {
+            try {
+              const cred = await signInWithEmailAndPassword(auth, email, normReg);
+              firebaseUid = cred.user.uid;
+            } catch {
+              try {
+                const cred = await createUserWithEmailAndPassword(auth, email, normReg);
+                firebaseUid = cred.user.uid;
+              } catch {}
+            }
           }
+
+          const firstLoginAt = new Date().toISOString();
           student.isActivated = true;
           student.status = 'ACTIVE';
           student.lastLoginAt = firstLoginAt;
+          if (firebaseUid) student.uid = firebaseUid;
+
+          if (isFirebaseConfigured() && db) {
+            try {
+              await setDoc(doc(db, 'students', student.id), {
+                ...sanitizeForFirestore(student),
+                isActivated: true,
+                status: 'ACTIVE',
+                uid: firebaseUid || student.uid || `uid_${normReg}`,
+                lastLoginAt: firstLoginAt,
+                updatedAt: serverTimestamp(),
+              }, { merge: true });
+            } catch (activationError) {
+              console.warn('[AuthService] Could not persist first-login activation to Firebase:', activationError);
+            }
+          }
+
           const cachedStudents = getLocalStudents();
           const cachedIndex = cachedStudents.findIndex(item => normalizeRegNo(item.registrationNumber) === normReg);
           if (cachedIndex !== -1) {
@@ -443,7 +481,7 @@ export async function studentLogin(registrationNumber: string, passwordInput: st
           window.dispatchEvent(new CustomEvent('signovanta:student-updated', { detail: { registrationNumber: normReg } }));
 
           const userProfile: UserProfile = {
-            uid: student.uid || `uid_${normReg}`,
+            uid: firebaseUid || student.uid || `uid_${normReg}`,
             email: student.email || email,
             displayName: student.fullName,
             role: 'STUDENT',
@@ -463,19 +501,37 @@ export async function studentLogin(registrationNumber: string, passwordInput: st
         } else {
           // Attempt Firebase Auth sign-in
           try {
-            const cred = await signInWithEmailAndPassword(auth, email, passwordInput);
-            await updateDoc(doc(db, 'students', student.id), {
-              isActivated: true,
-              status: 'ACTIVE',
-              lastLoginAt: serverTimestamp(),
-              updatedAt: serverTimestamp(),
-            });
+            if (isFirebaseConfigured() && auth) {
+              try {
+                const cred = await signInWithEmailAndPassword(auth, email, passwordInput);
+                firebaseUid = cred.user.uid;
+              } catch {
+                // Try create if account doesn't exist yet
+                try {
+                  const cred = await createUserWithEmailAndPassword(auth, email, passwordInput);
+                  firebaseUid = cred.user.uid;
+                } catch {}
+              }
+            }
+
+            const now = new Date().toISOString();
             student.isActivated = true;
             student.status = 'ACTIVE';
-            student.lastLoginAt = new Date().toISOString();
+            student.lastLoginAt = now;
+            if (firebaseUid) student.uid = firebaseUid;
+
+            if (isFirebaseConfigured() && db) {
+              await setDoc(doc(db, 'students', student.id), {
+                isActivated: true,
+                status: 'ACTIVE',
+                lastLoginAt: now,
+                updatedAt: serverTimestamp(),
+              }, { merge: true });
+            }
+
             const userProfile: UserProfile = {
-              uid: cred.user.uid,
-              email: cred.user.email || email,
+              uid: firebaseUid || student.uid || `uid_${normReg}`,
+              email: email,
               displayName: student.fullName,
               role: 'STUDENT',
               registrationNumber: normReg,
@@ -488,7 +544,7 @@ export async function studentLogin(registrationNumber: string, passwordInput: st
               isFirstLogin: false,
               hasSetPassword: true,
               createdAt: student.createdAt,
-              lastLoginAt: new Date().toISOString(),
+              lastLoginAt: now,
             };
             return { user: userProfile, student, requiresPasswordChange: false };
           } catch (fbErr: any) {
@@ -523,6 +579,19 @@ export async function studentLogin(registrationNumber: string, passwordInput: st
     student.isActivated = true;
     student.status = 'ACTIVE';
     student.lastLoginAt = firstLoginAt;
+
+    if (isFirebaseConfigured() && db) {
+      try {
+        void setDoc(doc(db, 'students', student.id), {
+          ...sanitizeForFirestore(student),
+          isActivated: true,
+          status: 'ACTIVE',
+          lastLoginAt: firstLoginAt,
+          updatedAt: serverTimestamp(),
+        }, { merge: true });
+      } catch {}
+    }
+
     saveLocalStudents(students);
     window.dispatchEvent(new CustomEvent('signovanta:student-updated', { detail: { registrationNumber: normReg } }));
 

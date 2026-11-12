@@ -87,7 +87,7 @@ export const NewEventForm: React.FC<NewEventFormProps> = ({ onBack, onSuccess, i
     }
   };
 
-  const handleSubmit = (isDraft: boolean) => {
+  const handleSubmit = async (isDraft: boolean) => {
     setError(null);
 
     if (!eventName.trim()) {
@@ -192,14 +192,14 @@ export const NewEventForm: React.FC<NewEventFormProps> = ({ onBack, onSuccess, i
       let resultApp: EventApplication;
       if (initialData?.id) {
         // Updating existing draft
-        resultApp = updateApplication(initialData.id, {
+        resultApp = await updateApplication(initialData.id, {
           ...payload,
           status: isDraft ? 'DRAFT' : 'SUBMITTED',
           progressPercent: 0,
         });
       } else {
         // Creating new event application
-        resultApp = createApplication(payload, isDraft);
+        resultApp = await createApplication(payload, isDraft);
       }
 
       onSuccess(resultApp);

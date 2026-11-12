@@ -1,17 +1,9 @@
 {
   "rules": {
+    ".read": true,
+    ".write": true,
     "presence": {
-      ".read": true,
-      "$uid": {
-        ".write": true,
-        ".indexOn": ["isOnline", "lastSeenAt", "role", "registrationNumber"]
-      }
-    },
-    "monitoring": {
-      ".read": true,
-      ".write": "auth != null"
-    },
-    ".read": "auth != null",
-    ".write": "auth != null"
+      ".indexOn": ["isOnline", "lastSeenAt", "role", "registrationNumber"]
+    }
   }
 }

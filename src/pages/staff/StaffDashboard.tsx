@@ -22,6 +22,7 @@ import { EventParticipationAnalytics } from '../../components/analytics/EventPar
 import {
   getLocalStudents,
   syncStudentsFromFirebase,
+  subscribeToStudents,
   getStudentRegistrationRequests,
   saveStudentRegistrationRequests,
   approveStudentRegistrationRequest,
@@ -256,12 +257,16 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({ activeTab: reque
     const unsubApps = subscribeToApplications((remote) => {
       setApplications(remote.filter(a => a.status !== 'DRAFT'));
     });
+    const unsubStudents = subscribeToStudents((remote) => {
+      setStudents(remote);
+    });
     const unsubReqs = subscribeToStudentRequests((remote) => {
       setStudentRequests(remote);
     });
 
     return () => {
       unsubApps();
+      unsubStudents();
       unsubReqs();
     };
   }, []);
@@ -297,13 +302,13 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({ activeTab: reque
     setApplications(getAllApplications().filter(a => a.status !== 'DRAFT'));
   };
 
-  const handleActionConfirm = () => {
+  const handleActionConfirm = async () => {
     if (!selectedApp || !actionType) return;
     setIsProcessing(true);
 
     try {
       if (actionType === 'pre_approve') {
-        preApproveApplication(
+        await preApproveApplication(
           selectedApp.id,
           currentUser.uid,
           currentUser.displayName,
@@ -311,7 +316,7 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({ activeTab: reque
           remarks || 'Approved for event participation.'
         );
       } else if (actionType === 'complete') {
-        completeEventApplication(
+        await completeEventApplication(
           selectedApp.id,
           currentUser.uid,
           currentUser.displayName,
@@ -319,7 +324,7 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({ activeTab: reque
           remarks || 'Certificates successfully verified.'
         );
       } else if (actionType === 'correct') {
-        requestCorrectionApplication(
+        await requestCorrectionApplication(
           selectedApp.id,
           currentUser.uid,
           currentUser.displayName,
@@ -327,7 +332,7 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({ activeTab: reque
           remarks
         );
       } else if (actionType === 'reject') {
-        rejectApplication(
+        await rejectApplication(
           selectedApp.id,
           currentUser.uid,
           currentUser.displayName,
@@ -910,9 +915,9 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({ activeTab: reque
           editorName={currentUser?.displayName || 'Staff'}
           editorRole={currentUser?.role || 'STAFF'}
           onUpdate={updated => setApplications(current => current.map(item => item.id === updated.id ? updated : item))}
-          onEnableStudentEdit={application => {
+          onEnableStudentEdit={async application => {
             try {
-              const updated = enableStudentApplicationEditing(
+              const updated = await enableStudentApplicationEditing(
                 application.id,
                 currentUser?.uid || 'staff-user',
                 currentUser?.displayName || 'Staff',

@@ -118,7 +118,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'exports', label: 'Exports', icon: BarChart3 },
     { id: 'issues', label: 'Requests & Issues', icon: AlertCircle, notificationCount: notifications.unresolvedIssues },
     { id: 'settings', label: 'System Settings', icon: Settings },
-    { id: 'delete_things', label: 'Delete Things', icon: Trash2 },
   ];
 
   const navItems =

@@ -199,7 +199,7 @@ const MainAppLayout: React.FC = () => {
 
   const role = currentUser.role;
   const validTabs = role === 'MASTER_ADMIN'
-    ? ['overview', 'students', 'staff', 'analytics', 'approvals', 'submissions', 'announcements', 'categories', 'exports', 'issues', 'settings', 'delete_things']
+    ? ['overview', 'students', 'staff', 'analytics', 'approvals', 'submissions', 'announcements', 'categories', 'exports', 'issues', 'settings']
     : ['STAFF', 'HOD', 'AHOD'].includes(role)
     ? ['dashboard', 'submissions', 'student_requests', 'announcements', 'analytics', 'exports', 'issues', 'settings']
     : ['dashboard', 'new_event', 'applications', 'history', 'issues', 'settings'];

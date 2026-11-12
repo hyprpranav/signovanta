@@ -50,7 +50,7 @@ export const ApplicationEditModal: React.FC<ApplicationEditModalProps> = ({
     setForm(current => ({ ...current, [field]: value }));
   };
 
-  const save = () => {
+  const save = async () => {
     if (!form.studentName.trim() || !form.eventName.trim() || !form.organizerName.trim() ||
       !form.institutionName.trim() || !form.eventLocation.trim() || !form.eventDescription.trim()) {
       setError('Student name and all required event details must be filled in.');
@@ -63,7 +63,7 @@ export const ApplicationEditModal: React.FC<ApplicationEditModalProps> = ({
     setSaving(true);
     setError(null);
     try {
-      const updated = editCompletedApplication(application.id, {
+      const updated = await editCompletedApplication(application.id, {
         ...form,
         studentName: form.studentName.trim(),
         eventName: form.eventName.trim(),
