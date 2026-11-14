@@ -10,6 +10,8 @@ import {
   UserRole,
   SupportIssue,
   IssueCategory,
+  DirectCertificate,
+  DirectCertificateType,
 } from '../../types';
 import { INITIAL_CATEGORIES, INITIAL_SECTIONS } from '../../data/seedStudents';
 import { db, isFirebaseConfigured } from './firebaseConfig';
@@ -191,6 +193,57 @@ export async function deleteApplication(applicationId: string): Promise<void> {
   }
 }
 
+export async function deleteStudentSubmissions(studentRegNo: string): Promise<number> {
+  const norm = studentRegNo.toUpperCase().trim().replace(/\s+/g, '');
+  const all = getAllApplications();
+  const toDelete = all.filter(a => a.studentRegNo.toUpperCase().trim().replace(/\s+/g, '') === norm);
+  const remaining = all.filter(a => a.studentRegNo.toUpperCase().trim().replace(/\s+/g, '') !== norm);
+  saveAllApplications(remaining);
+
+  if (isFirebaseConfigured() && db) {
+    for (const app of toDelete) {
+      try {
+        await deleteDoc(doc(db, 'eventApplications', app.id));
+      } catch (e) {
+        console.warn(`[SIGNOVANTA] Notice deleting app ${app.id}:`, e);
+      }
+    }
+  }
+
+  // Also delete direct certificates of this student
+  const allCerts = getAllDirectCertificates();
+  const certsRemaining = allCerts.filter(c => c.studentRegNo.toUpperCase().trim().replace(/\s+/g, '') !== norm);
+  const certsToDelete = allCerts.filter(c => c.studentRegNo.toUpperCase().trim().replace(/\s+/g, '') === norm);
+  saveAllDirectCertificates(certsRemaining);
+  if (isFirebaseConfigured() && db) {
+    for (const cert of certsToDelete) {
+      try {
+        await deleteDoc(doc(db, 'directCertificates', cert.id));
+      } catch (e) {
+        console.warn(`[SIGNOVANTA] Notice deleting cert ${cert.id}:`, e);
+      }
+    }
+  }
+
+  return toDelete.length;
+}
+
+export async function deleteAllApplications(): Promise<number> {
+  const all = getAllApplications();
+  saveAllApplications([]);
+
+  if (isFirebaseConfigured() && db) {
+    for (const app of all) {
+      try {
+        await deleteDoc(doc(db, 'eventApplications', app.id));
+      } catch (e) {
+        console.warn(`[SIGNOVANTA] Notice deleting app ${app.id}:`, e);
+      }
+    }
+  }
+  return all.length;
+}
+
 export function getApplicationsForStudent(studentRegNo: string): EventApplication[] {
   const norm = studentRegNo.toUpperCase().trim();
   const all = getAllApplications();
@@ -354,6 +407,60 @@ export async function enableStudentApplicationEditing(
     linkUrl: '/student/applications',
   });
   return updated;
+}
+
+export async function disableStudentApplicationEditing(
+  applicationId: string,
+  editorUid: string,
+  editorName: string,
+  editorRole: UserRole
+): Promise<EventApplication> {
+  const app = getApplicationById(applicationId);
+  if (!app) throw new Error('Application not found');
+
+  const all = getAllApplications();
+  const idx = all.findIndex(a => a.id === applicationId);
+  if (idx !== -1) {
+    const updated = { ...all[idx] };
+    delete updated.studentEditEnabledAt;
+    delete updated.studentEditEnabledBy;
+    delete updated.studentEditEnabledByName;
+    updated.updatedAt = new Date().toISOString();
+    all[idx] = updated;
+    saveAllApplications(all);
+
+    if (isFirebaseConfigured() && db) {
+      try {
+        await updateDoc(doc(db, 'eventApplications', applicationId), {
+          studentEditEnabledAt: null,
+          studentEditEnabledBy: null,
+          studentEditEnabledByName: null,
+          updatedAt: serverTimestamp(),
+        });
+      } catch (e) {
+        console.warn('[SIGNOVANTA] Notice locking student edit in Firestore:', e);
+      }
+    }
+
+    createApprovalLog({
+      applicationId: app.id,
+      applicationNumber: app.applicationNumber,
+      action: 'STUDENT_EDIT_DISABLED',
+      performedByUid: editorUid,
+      performedByName: editorName,
+      performedByRole: editorRole,
+      remarks: 'Student editing locked / disabled for this completed event application.',
+    });
+    createNotification({
+      userId: app.studentId,
+      title: 'Student Editing Locked',
+      message: `Editing privileges have been locked for your event "${app.eventName}".`,
+      type: 'INFO',
+      linkUrl: '/student/applications',
+    });
+    return updated;
+  }
+  return app;
 }
 
 /**
@@ -968,5 +1075,182 @@ export function subscribeToSupportIssues(callback: (issues: SupportIssue[]) => v
     }, () => {});
   } catch {
     return () => {};
+  }
+}
+
+// ------------------------------------------------------------------------------
+// Direct Certificate Submissions (Single-Step Process)
+// ------------------------------------------------------------------------------
+const DIRECT_CERTS_KEY = 'signovanta_direct_certificates_cache';
+
+export function getAllDirectCertificates(): DirectCertificate[] {
+  try {
+    const raw = localStorage.getItem(DIRECT_CERTS_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch (e) {
+    console.warn('Error reading direct certs cache:', e);
+  }
+  return [];
+}
+
+export function saveAllDirectCertificates(certs: DirectCertificate[]): void {
+  localStorage.setItem(DIRECT_CERTS_KEY, JSON.stringify(certs));
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('signovanta:data-updated'));
+  }
+}
+
+export function getDirectCertificatesForStudent(studentRegNo: string): DirectCertificate[] {
+  const norm = studentRegNo.toUpperCase().trim().replace(/\s+/g, '');
+  const all = getAllDirectCertificates();
+  return all.filter(c => c.studentRegNo.toUpperCase().trim().replace(/\s+/g, '') === norm);
+}
+
+export async function syncDirectCertificatesFromFirebase(): Promise<DirectCertificate[]> {
+  if (!isFirebaseConfigured() || !db) return getAllDirectCertificates();
+  try {
+    const snapshot = await getDocs(collection(db, 'directCertificates'));
+    const remote = snapshot.docs.map(item => ({ id: item.id, ...item.data() })) as DirectCertificate[];
+    saveAllDirectCertificates(remote);
+    return remote;
+  } catch (error) {
+    console.error('[SIGNOVANTA] Failed to load direct certificates from Firebase', error);
+    return getAllDirectCertificates();
+  }
+}
+
+export function subscribeToDirectCertificates(callback: (certs: DirectCertificate[]) => void): () => void {
+  if (!isFirebaseConfigured() || !db) return () => {};
+  try {
+    return onSnapshot(collection(db, 'directCertificates'), (snapshot) => {
+      const remote = snapshot.docs.map(item => ({ id: item.id, ...item.data() })) as DirectCertificate[];
+      saveAllDirectCertificates(remote);
+      callback(remote);
+    }, (error) => {
+      console.warn('[SIGNOVANTA] Direct certificates subscription warning:', error);
+    });
+  } catch (err) {
+    console.warn('[SIGNOVANTA] Could not subscribe to direct certificates:', err);
+    return () => {};
+  }
+}
+
+export async function submitDirectCertificate(
+  data: Omit<DirectCertificate, 'id' | 'certificateNumber' | 'status' | 'createdAt' | 'updatedAt'>
+): Promise<DirectCertificate> {
+  const all = getAllDirectCertificates();
+  const count = all.length + 1;
+  const year = new Date().getFullYear();
+  const certificateNumber = `CERT-${year}-${String(count).padStart(4, '0')}`;
+
+  const cleanData = sanitizeForFirestore(data);
+
+  const newCert: DirectCertificate = {
+    ...cleanData,
+    id: `cert_${Date.now()}`,
+    certificateNumber,
+    status: 'PENDING',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  const finalCert = sanitizeForFirestore(newCert);
+  all.unshift(finalCert);
+  saveAllDirectCertificates(all);
+  await mirrorToFirebase('directCertificates', finalCert.id, finalCert);
+
+  void createNotification({
+    userId: 'ALL',
+    title: 'New Direct Certificate Submitted',
+    message: `${finalCert.studentName} (${finalCert.studentRegNo}) submitted a ${finalCert.certificateTypeName} for "${finalCert.title}".`,
+    type: 'INFO',
+    linkUrl: '/staff/certificates',
+  });
+
+  return finalCert;
+}
+
+export async function verifyDirectCertificate(
+  id: string,
+  verifierUid: string,
+  verifierName: string,
+  verifierRole: UserRole,
+  remarks?: string
+): Promise<DirectCertificate> {
+  const all = getAllDirectCertificates();
+  const idx = all.findIndex(c => c.id === id);
+  if (idx === -1) throw new Error('Certificate not found');
+
+  const updated: DirectCertificate = {
+    ...all[idx],
+    status: 'VERIFIED',
+    verifiedBy: verifierUid,
+    verifiedByName: verifierName,
+    verifiedAt: new Date().toISOString(),
+    remarks: remarks || 'Verified and approved by faculty.',
+    updatedAt: new Date().toISOString(),
+  };
+
+  all[idx] = updated;
+  saveAllDirectCertificates(all);
+  await mirrorToFirebase('directCertificates', id, updated);
+
+  void createNotification({
+    userId: updated.studentId,
+    title: 'Certificate Verified ✓',
+    message: `Your ${updated.certificateTypeName} for "${updated.title}" has been verified by ${verifierName}.`,
+    type: 'SUCCESS',
+    linkUrl: '/student/certificates',
+  });
+
+  return updated;
+}
+
+export async function rejectDirectCertificate(
+  id: string,
+  verifierUid: string,
+  verifierName: string,
+  verifierRole: UserRole,
+  remarks?: string
+): Promise<DirectCertificate> {
+  const all = getAllDirectCertificates();
+  const idx = all.findIndex(c => c.id === id);
+  if (idx === -1) throw new Error('Certificate not found');
+
+  const updated: DirectCertificate = {
+    ...all[idx],
+    status: 'REJECTED',
+    verifiedBy: verifierUid,
+    verifiedByName: verifierName,
+    verifiedAt: new Date().toISOString(),
+    remarks: remarks || 'Rejected by faculty.',
+    updatedAt: new Date().toISOString(),
+  };
+
+  all[idx] = updated;
+  saveAllDirectCertificates(all);
+  await mirrorToFirebase('directCertificates', id, updated);
+
+  void createNotification({
+    userId: updated.studentId,
+    title: 'Certificate Rejected',
+    message: `Your certificate for "${updated.title}" was rejected. Remarks: ${remarks || 'Does not meet criteria.'}`,
+    type: 'ALERT',
+    linkUrl: '/student/certificates',
+  });
+
+  return updated;
+}
+
+export async function deleteDirectCertificate(id: string): Promise<void> {
+  const all = getAllDirectCertificates();
+  const remaining = all.filter(c => c.id !== id);
+  saveAllDirectCertificates(remaining);
+  if (isFirebaseConfigured() && db) {
+    try {
+      await deleteDoc(doc(db, 'directCertificates', id));
+    } catch (e) {
+      console.warn(`[SIGNOVANTA] Notice deleting cert ${id}:`, e);
+    }
   }
 }

@@ -311,7 +311,7 @@ export const StudentDirectoryMonitor: React.FC<StudentDirectoryMonitorProps> = (
 
                       {/* Event Count */}
                       <td className="py-2.5 px-2 whitespace-nowrap font-bold text-slate-800">
-                        {student.eventCount}
+                        {applications.filter(a => a.studentRegNo.toUpperCase().trim().replace(/\s+/g, '') === student.registrationNumber.toUpperCase().trim().replace(/\s+/g, '') && a.status !== 'DRAFT').length}
                       </td>
 
                       {/* Admin Controls */}
@@ -404,7 +404,9 @@ export const StudentDirectoryMonitor: React.FC<StudentDirectoryMonitorProps> = (
                     </div>
                     <div>
                       <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Events</p>
-                      <p className="mt-1 text-xs font-semibold text-slate-800">{student.eventCount || 0}</p>
+                      <p className="mt-1 text-xs font-semibold text-slate-800">
+                        {applications.filter(a => a.studentRegNo.toUpperCase().trim().replace(/\s+/g, '') === student.registrationNumber.toUpperCase().trim().replace(/\s+/g, '') && a.status !== 'DRAFT').length}
+                      </p>
                     </div>
                   </div>
 

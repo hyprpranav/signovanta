@@ -67,7 +67,7 @@ export const ExportManagement: React.FC<ExportManagementProps> = ({
       'Academic Year': student.academicYear,
       'Account Status': student.status,
       Activated: student.isActivated ? 'Yes' : 'No',
-      Events: student.eventCount,
+      Events: applications.filter(a => a.studentRegNo.toUpperCase().trim().replace(/\s+/g, '') === student.registrationNumber.toUpperCase().trim().replace(/\s+/g, '') && a.status !== 'DRAFT').length,
     })),
     ...(isMasterAdmin ? staff.map(member => ({
       Type: 'Staff',

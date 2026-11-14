@@ -1,19 +1,21 @@
-import React, { useMemo, useState } from 'react';
-import { CalendarDays, Download, Eye, Filter, MapPin, Pencil, Trash2, XCircle } from 'lucide-react';
+import React, { useMemo, useState, useEffect } from 'react';
+import { CalendarDays, Download, Eye, Filter, MapPin, Pencil, Trash2, XCircle, MoreVertical, Lock, Unlock } from 'lucide-react';
 import { EventApplication, UserRole } from '../../types';
 import { getApprovalLogs } from '../../services/firebase/firestoreService';
 import { Badge } from './Badge';
 import { Modal } from './Modal';
 import { ApplicationEditModal } from './ApplicationEditModal';
+import { PinVerificationModal } from './PinVerificationModal';
 
 interface SubmissionsPanelProps {
   applications: EventApplication[];
   onApprove: (application: EventApplication) => void;
   onComplete?: (application: EventApplication) => void;
   onReject: (application: EventApplication) => void;
-  onDelete: (application: EventApplication) => void;
+  onDelete: (application: EventApplication) => void | Promise<void>;
   onUpdate?: (application: EventApplication) => void;
-  onEnableStudentEdit?: (application: EventApplication) => void;
+  onEnableStudentEdit?: (application: EventApplication) => void | Promise<void>;
+  onDisableStudentEdit?: (application: EventApplication) => void | Promise<void>;
   editorUid?: string;
   editorName?: string;
   editorRole?: UserRole;
@@ -25,12 +27,21 @@ function isImageDocument(url: string): boolean {
     cleanUrl.startsWith('data:image/');
 }
 
-export const SubmissionsPanel: React.FC<SubmissionsPanelProps> = ({ applications, onApprove, onComplete, onReject, onDelete, onUpdate, onEnableStudentEdit, editorUid, editorName, editorRole }) => {
+export const SubmissionsPanel: React.FC<SubmissionsPanelProps> = ({ applications, onApprove, onComplete, onReject, onDelete, onUpdate, onEnableStudentEdit, onDisableStudentEdit, editorUid, editorName, editorRole }) => {
   const [stage, setStage] = useState('ALL');
   const [category, setCategory] = useState('ALL');
   const [selected, setSelected] = useState<EventApplication | null>(null);
   const [selectedStage, setSelectedStage] = useState<'FIFTY' | 'HUNDRED' | 'FULL'>('FIFTY');
   const [editing, setEditing] = useState<EventApplication | null>(null);
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  const [appToDelete, setAppToDelete] = useState<EventApplication | null>(null);
+
+  useEffect(() => {
+    const handleOutside = () => setOpenMenuId(null);
+    window.addEventListener('click', handleOutside);
+    return () => window.removeEventListener('click', handleOutside);
+  }, []);
+
   const categories = Array.from(new Set(applications.map(app => app.eventCategory).filter(Boolean))).sort();
   const filtered = useMemo(() => applications.filter(app => {
     if (app.status === 'DRAFT') return false; // Drafts are strictly private to student
@@ -87,23 +98,133 @@ export const SubmissionsPanel: React.FC<SubmissionsPanelProps> = ({ applications
                 <p className="mt-1 truncate text-sm font-bold text-slate-900">{app.eventName}</p>
                 <p className="text-xs text-slate-500">{app.startDate} to {app.endDate}</p>
               </div>
-              <div className="flex flex-wrap gap-2 lg:justify-end">
-                <button onClick={() => { setSelectedStage(app.status === 'COMPLETED' ? 'FULL' : 'FIFTY'); setSelected(app); }} className="rounded-xl bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100"><Eye size={14} className="mr-1 inline" />{app.status === 'COMPLETED' ? 'View Full Event' : 'View 50% Details'}</button>
+              <div className="flex flex-wrap items-center gap-2 lg:justify-end">
+                <button
+                  type="button"
+                  onClick={() => { setSelectedStage(app.status === 'COMPLETED' ? 'FULL' : 'FIFTY'); setSelected(app); }}
+                  className="rounded-xl bg-blue-50 px-3 py-2 text-xs font-bold text-blue-700 hover:bg-blue-100 transition-colors"
+                >
+                  <Eye size={14} className="mr-1 inline" />
+                  {app.status === 'COMPLETED' ? 'View Full Event' : 'View 50% Details'}
+                </button>
+
                 {app.status === 'CERTIFICATE_SUBMITTED' && (
                   <>
-                    <button onClick={() => { setSelectedStage('HUNDRED'); setSelected(app); }} className="rounded-xl bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-700 hover:bg-indigo-100"><Eye size={14} className="mr-1 inline" />View 100% Details</button>
-                    {onComplete && <button onClick={() => onComplete(app)} className="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-100">Approve 100%</button>}
+                    <button
+                      type="button"
+                      onClick={() => { setSelectedStage('HUNDRED'); setSelected(app); }}
+                      className="rounded-xl bg-indigo-50 px-3 py-2 text-xs font-bold text-indigo-700 hover:bg-indigo-100 transition-colors"
+                    >
+                      <Eye size={14} className="mr-1 inline" />View 100% Details
+                    </button>
+                    {onComplete && (
+                      <button
+                        type="button"
+                        onClick={() => onComplete(app)}
+                        className="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-100 transition-colors"
+                      >
+                        Approve 100%
+                      </button>
+                    )}
                   </>
                 )}
+
+                {/* Lock / Unlock Student Edit Toggle */}
                 {app.status === 'COMPLETED' && editorRole && editorUid && editorName && (
                   <>
-                    {onEnableStudentEdit && <button onClick={() => onEnableStudentEdit(app)} className="rounded-xl bg-violet-50 px-3 py-2 text-xs font-bold text-violet-800 hover:bg-violet-100"><Pencil size={14} className="mr-1 inline" />Enable Student Edit</button>}
-                    <button onClick={() => setEditing(app)} className="rounded-xl bg-amber-50 px-3 py-2 text-xs font-bold text-amber-800 hover:bg-amber-100"><Pencil size={14} className="mr-1 inline" />Staff/Admin Edit</button>
+                    {app.studentEditEnabledAt ? (
+                      <button
+                        type="button"
+                        onClick={() => onDisableStudentEdit && onDisableStudentEdit(app)}
+                        className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 text-xs font-bold text-amber-800 hover:bg-amber-100 transition-colors"
+                        title="Lock student editing"
+                      >
+                        <Lock size={14} className="mr-1 inline text-amber-700" />
+                        Lock Edit
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => onEnableStudentEdit && onEnableStudentEdit(app)}
+                        className="rounded-xl bg-violet-50 border border-violet-200 px-3 py-2 text-xs font-bold text-violet-800 hover:bg-violet-100 transition-colors"
+                        title="Enable student editing"
+                      >
+                        <Unlock size={14} className="mr-1 inline text-violet-700" />
+                        Enable Student Edit
+                      </button>
+                    )}
                   </>
                 )}
-                {['SUBMITTED', 'UNDER_REVIEW', 'CORRECTION_REQUIRED'].includes(app.status) && <button onClick={() => onApprove(app)} className="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-100">Approve 50%</button>}
-                {app.status !== 'REJECTED' && app.status !== 'COMPLETED' && <button onClick={() => onReject(app)} className="rounded-xl bg-rose-50 px-3 py-2 text-xs font-bold text-rose-700 hover:bg-rose-100"><XCircle size={14} className="mr-1 inline" />Reject</button>}
-                {app.status === 'REJECTED' && <button onClick={() => onDelete(app)} className="rounded-xl bg-slate-100 px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-200"><Trash2 size={14} className="mr-1 inline" />Delete</button>}
+
+                {['SUBMITTED', 'UNDER_REVIEW', 'CORRECTION_REQUIRED'].includes(app.status) && (
+                  <button
+                    type="button"
+                    onClick={() => onApprove(app)}
+                    className="rounded-xl bg-emerald-50 px-3 py-2 text-xs font-bold text-emerald-700 hover:bg-emerald-100 transition-colors"
+                  >
+                    Approve 50%
+                  </button>
+                )}
+
+                {/* 3-Dots Action Menu */}
+                <div className="relative">
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setOpenMenuId(openMenuId === app.id ? null : app.id);
+                    }}
+                    className="rounded-xl border border-slate-200 bg-white p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition-colors cursor-pointer"
+                    title="More actions"
+                  >
+                    <MoreVertical size={15} />
+                  </button>
+
+                  {openMenuId === app.id && (
+                    <div
+                      onClick={(e) => e.stopPropagation()}
+                      className="absolute right-0 top-full mt-1.5 w-48 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl z-20 space-y-1 animate-in fade-in"
+                    >
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOpenMenuId(null);
+                          setEditing(app);
+                        }}
+                        className="w-full flex items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-bold text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                      >
+                        <Pencil size={14} className="text-blue-600" />
+                        <span>Staff/Admin Edit</span>
+                      </button>
+
+                      {app.status !== 'REJECTED' && app.status !== 'COMPLETED' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setOpenMenuId(null);
+                            onReject(app);
+                          }}
+                          className="w-full flex items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-bold text-rose-700 hover:bg-rose-50 transition-colors cursor-pointer"
+                        >
+                          <XCircle size={14} className="text-rose-600" />
+                          <span>Reject Event</span>
+                        </button>
+                      )}
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setOpenMenuId(null);
+                          setAppToDelete(app);
+                        }}
+                        className="w-full flex items-center gap-2 rounded-xl px-3 py-2 text-left text-xs font-bold text-rose-700 hover:bg-rose-50 transition-colors cursor-pointer border-t border-slate-100"
+                      >
+                        <Trash2 size={14} className="text-rose-600" />
+                        <span>Delete Submission</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
               {app.status === 'PRE_APPROVED' && (
@@ -272,6 +393,20 @@ export const SubmissionsPanel: React.FC<SubmissionsPanelProps> = ({ applications
           }}
         />
       )}
+
+      <PinVerificationModal
+        isOpen={!!appToDelete}
+        onClose={() => setAppToDelete(null)}
+        onSuccess={async () => {
+          if (appToDelete) {
+            await onDelete(appToDelete);
+            setAppToDelete(null);
+          }
+        }}
+        title={`Delete Event: "${appToDelete?.eventName || ''}"`}
+        description={`Permanently delete application ${appToDelete?.applicationNumber || ''} for student ${appToDelete?.studentName || ''} (${appToDelete?.studentRegNo || ''})? This action cannot be reversed.`}
+        confirmButtonText="Delete Submission"
+      />
     </div>
   );
 };

@@ -6,6 +6,7 @@ import {
   preApproveApplication,
   completeEventApplication,
   enableStudentApplicationEditing,
+  disableStudentApplicationEditing,
   requestCorrectionApplication,
   rejectApplication,
   createStaffAnnouncement,
@@ -13,9 +14,12 @@ import {
   syncApplicationsFromFirebase,
   subscribeToApplications,
   deleteApplication,
+  deleteStudentSubmissions,
 } from '../../services/firebase/firestoreService';
 import { ExportManagement } from '../../components/common/ExportManagement';
 import { SubmissionsPanel } from '../../components/common/SubmissionsPanel';
+import { DirectCertificatesPanel } from '../../components/common/DirectCertificatesPanel';
+import { DeleteThingsPanel } from '../../components/common/DeleteThingsPanel';
 import { EventOutcomeAnalytics } from '../../components/common/EventOutcomeAnalytics';
 import { WinnersCertificateShowcase } from '../../components/analytics/WinnersCertificateShowcase';
 import { EventParticipationAnalytics } from '../../components/analytics/EventParticipationAnalytics';
@@ -29,6 +33,7 @@ import {
   rejectStudentRegistrationRequest,
   updateStaffProfile,
   changeStaffPassword,
+  deleteStudent,
   syncStudentRegistrationRequestsFromFirebase,
   subscribeToStudentRequests,
 } from '../../services/firebase/authService';
@@ -69,7 +74,9 @@ interface StaffDashboardProps {
 
 export const StaffDashboard: React.FC<StaffDashboardProps> = ({ activeTab: requestedTab }) => {
   const { currentUser, staffData } = useAuth();
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'submissions' | 'student_requests' | 'announcements' | 'exports' | 'analytics' | 'settings'>('dashboard');
+  const [activeTab, setActiveTab] = useState<
+    'dashboard' | 'submissions' | 'certificates' | 'delete_things' | 'student_requests' | 'announcements' | 'exports' | 'analytics' | 'settings'
+  >('dashboard');
   const [submissionsSubTab, setSubmissionsSubTab] = useState<'pre_approvals' | 'certificates' | 'all'>('pre_approvals');
   const [applications, setApplications] = useState<EventApplication[]>(() =>
     getAllApplications().filter(a => a.status !== 'DRAFT')
@@ -234,9 +241,13 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({ activeTab: reque
     if (requestedTab === 'approvals' || requestedTab === 'pre_approvals') {
       setActiveTab('submissions');
       setSubmissionsSubTab('pre_approvals');
-    } else if (requestedTab === 'certificates' || requestedTab === 'certificate_verification') {
+    } else if (requestedTab === 'certificate_verification') {
       setActiveTab('submissions');
       setSubmissionsSubTab('certificates');
+    } else if (requestedTab === 'certificates') {
+      setActiveTab('certificates');
+    } else if (requestedTab === 'delete_things') {
+      setActiveTab('delete_things');
     } else if (requestedTab === 'submissions') {
       setActiveTab('submissions');
     } else if (requestedTab === 'my_profile') {
@@ -928,6 +939,19 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({ activeTab: reque
               alert(error instanceof Error ? error.message : 'Unable to enable student editing.');
             }
           }}
+          onDisableStudentEdit={async application => {
+            try {
+              const updated = await disableStudentApplicationEditing(
+                application.id,
+                currentUser?.uid || 'staff-user',
+                currentUser?.displayName || 'Staff',
+                currentUser?.role || 'STAFF'
+              );
+              setApplications(current => current.map(item => item.id === updated.id ? updated : item));
+            } catch (error) {
+              alert(error instanceof Error ? error.message : 'Unable to lock student editing.');
+            }
+          }}
           onComplete={application => {
             setSelectedApp(application);
             setActionType('complete');
@@ -953,6 +977,35 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({ activeTab: reque
       )}
     </div>
   )}
+
+      {/* Tab: Direct Certificates (Single-Step Submissions) */}
+      {activeTab === 'certificates' && (
+        <DirectCertificatesPanel
+          editorUid={currentUser?.uid || 'staff-member'}
+          editorName={currentUser?.displayName || staffName}
+          editorRole={currentUser?.role || 'STAFF'}
+          isMasterAdmin={false}
+        />
+      )}
+
+      {/* Tab: Delete Records (Guarded with 2-Step PIN 927624) */}
+      {activeTab === 'delete_things' && (
+        <DeleteThingsPanel
+          students={students}
+          applications={applications}
+          onDeleteStudentSubmissions={async (regNo) => {
+            await deleteStudentSubmissions(regNo);
+            const norm = regNo.toUpperCase().trim();
+            setApplications(current => current.filter(a => a.studentRegNo.toUpperCase().trim() !== norm));
+          }}
+          onDeleteStudent={async (student) => {
+            await deleteStudent(student.id, student.registrationNumber);
+            setStudents(current => current.filter(s => s.id !== student.id));
+            setApplications(current => current.filter(a => a.studentRegNo.toUpperCase().trim() !== student.registrationNumber.toUpperCase().trim()));
+          }}
+          isMasterAdmin={false}
+        />
+      )}
 
       {/* Tab: Analytics */}
       {activeTab === 'analytics' && (
@@ -1311,7 +1364,7 @@ export const StaffDashboard: React.FC<StaffDashboardProps> = ({ activeTab: reque
                 ['Register Number', selectedStudent.registrationNumber, true],
                 ['Email Address', selectedStudent.email || 'Not provided', false],
                 ['Phone Number', selectedStudent.mobile || 'Not provided', false],
-                ['Events Participated', String(selectedStudent.eventCount || 0), false],
+                ['Events Participated', String(applications.filter(a => a.studentRegNo.toUpperCase().trim().replace(/\s+/g, '') === selectedStudent.registrationNumber.toUpperCase().trim().replace(/\s+/g, '') && a.status !== 'DRAFT').length), false],
               ].map(([label, value, mono]) => (
                 <div key={label as string} className="rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label}</p>

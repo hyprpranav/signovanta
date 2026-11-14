@@ -17,6 +17,7 @@ import {
   FileCheck,
   AlertCircle,
   Trash2,
+  Award,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -87,20 +88,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const studentNav: NavItem[] = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'new_event', label: 'New Event', icon: PlusCircle, highlight: true },
+    { id: 'certificates', label: 'Certificate Submissions', icon: Award },
     { id: 'applications', label: 'My Applications', icon: FileText, notificationCount: notifications.studentNotifications },
     { id: 'history', label: 'Event History', icon: History },
     { id: 'issues', label: 'Facing Issues?', icon: AlertCircle },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
-  // Staff Nav Items (Shared across STAFF, HOD, AHOD - NO delete_things)
+  // Staff Nav Items (Shared across STAFF, HOD, AHOD)
   const staffNav: NavItem[] = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'submissions', label: 'Submissions', icon: FileText, notificationCount: notifications.pendingSubmissions + notifications.pendingCertificates },
+    { id: 'certificates', label: 'Direct Certificates', icon: Award },
     { id: 'student_requests', label: 'Student Requests', icon: GraduationCap, notificationCount: notifications.pendingRegistrations },
     { id: 'announcements', label: 'Announcements', icon: Bell },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'exports', label: 'Exports', icon: BarChart3 },
+    { id: 'delete_things', label: 'Delete Records', icon: Trash2 },
     { id: 'issues', label: 'Facing Issues?', icon: AlertCircle, notificationCount: notifications.unresolvedIssues },
     { id: 'settings', label: 'Settings & Security', icon: Settings },
   ];
@@ -112,10 +116,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { id: 'staff', label: 'Staff & Role Requests', icon: Briefcase, notificationCount: notifications.pendingStaff },
     { id: 'approvals', label: 'Registration Approvals', icon: CheckSquare, notificationCount: notifications.pendingRegistrations },
     { id: 'submissions', label: 'Submissions & Verifications', icon: FileText, notificationCount: notifications.pendingSubmissions },
+    { id: 'certificates', label: 'Direct Certificates', icon: Award },
     { id: 'announcements', label: 'Announcements', icon: Bell },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'categories', label: 'Event Categories', icon: FileText },
     { id: 'exports', label: 'Exports', icon: BarChart3 },
+    { id: 'delete_things', label: 'Delete Records', icon: Trash2 },
     { id: 'issues', label: 'Requests & Issues', icon: AlertCircle, notificationCount: notifications.unresolvedIssues },
     { id: 'settings', label: 'System Settings', icon: Settings },
   ];

@@ -16,6 +16,7 @@ import {
   getDocs,
   serverTimestamp,
   onSnapshot,
+  deleteDoc,
 } from 'firebase/firestore';
 import { auth, db, isFirebaseConfigured } from './firebaseConfig';
 import { sanitizeForFirestore } from './firestoreService';
@@ -100,6 +101,31 @@ export async function updateStudentProfile(
   }
 
   return updatedStudent;
+}
+
+export async function deleteStudent(studentId: string, registrationNumber?: string): Promise<void> {
+  const students = getLocalStudents();
+  const index = students.findIndex(
+    s => s.id === studentId || (registrationNumber && normalizeRegNo(s.registrationNumber) === normalizeRegNo(registrationNumber))
+  );
+  const regNo = registrationNumber || (index !== -1 ? students[index].registrationNumber : '');
+  const remaining = students.filter(
+    s => s.id !== studentId && (!regNo || normalizeRegNo(s.registrationNumber) !== normalizeRegNo(regNo))
+  );
+  saveLocalStudents(remaining);
+
+  if (isFirebaseConfigured() && db) {
+    try {
+      await deleteDoc(doc(db, 'students', studentId));
+    } catch (err) {
+      console.warn('[SIGNOVANTA] Firestore student delete notice:', err);
+    }
+  }
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('signovanta:student-updated', { detail: { registrationNumber: regNo } }));
+    window.dispatchEvent(new Event('signovanta:data-updated'));
+  }
 }
 
 export async function syncStudentsFromFirebase(): Promise<Student[]> {

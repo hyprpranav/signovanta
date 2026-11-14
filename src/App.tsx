@@ -11,6 +11,7 @@ import { NewEventForm } from './pages/student/NewEventForm';
 import { StudentProfileView } from './pages/student/StudentProfileView';
 import { StudentApplicationsView } from './pages/student/StudentApplicationsView';
 import { StudentSettingsView } from './pages/student/StudentSettingsView';
+import { DirectCertificateSubmissionView } from './pages/student/DirectCertificateSubmissionView';
 import { StaffDashboard } from './pages/staff/StaffDashboard';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
 import { FirebaseSetupGuideModal } from './components/common/FirebaseSetupGuideModal';
@@ -199,10 +200,10 @@ const MainAppLayout: React.FC = () => {
 
   const role = currentUser.role;
   const validTabs = role === 'MASTER_ADMIN'
-    ? ['overview', 'students', 'staff', 'analytics', 'approvals', 'submissions', 'announcements', 'categories', 'exports', 'issues', 'settings']
+    ? ['overview', 'students', 'staff', 'analytics', 'approvals', 'submissions', 'certificates', 'delete_things', 'announcements', 'categories', 'exports', 'issues', 'settings']
     : ['STAFF', 'HOD', 'AHOD'].includes(role)
-    ? ['dashboard', 'submissions', 'student_requests', 'announcements', 'analytics', 'exports', 'issues', 'settings']
-    : ['dashboard', 'new_event', 'applications', 'history', 'issues', 'settings'];
+    ? ['dashboard', 'submissions', 'certificates', 'student_requests', 'delete_things', 'announcements', 'analytics', 'exports', 'issues', 'settings']
+    : ['dashboard', 'new_event', 'certificates', 'applications', 'history', 'issues', 'settings'];
   const selectedTab = validTabs.includes(currentTab)
     ? currentTab
     : defaultTabForUser;
@@ -270,6 +271,9 @@ const MainAppLayout: React.FC = () => {
                       setCurrentTab('applications');
                     }}
                   />
+                )}
+                {selectedTab === 'certificates' && (
+                  <DirectCertificateSubmissionView />
                 )}
                 {(selectedTab === 'applications' || selectedTab === 'history') && (
                   <StudentApplicationsView

@@ -241,6 +241,7 @@ export interface ApprovalLog {
     | 'REJECTED'
     | 'CERTIFICATES_UPLOADED'
     | 'STUDENT_EDIT_ENABLED'
+    | 'STUDENT_EDIT_DISABLED'
     | 'EDITED'
     | 'COMPLETED';
   performedByUid: string;
@@ -320,4 +321,41 @@ export interface SupportIssue {
   repliedAt?: string;
   repliedBy?: string;
   createdAt: string;
+}
+
+// ------------------------------------------------------------------------------
+// Direct Certificate Submissions (Single-Step Process)
+// ------------------------------------------------------------------------------
+export type DirectCertificateType =
+  | 'HACKATHON'
+  | 'NPTEL_COURSE'
+  | 'INTERNSHIP'
+  | 'WORKSHOP'
+  | 'PAPER_PRESENTATION'
+  | 'SYMPOSIUM_COMPETITION'
+  | 'OTHER';
+
+export interface DirectCertificate {
+  id: string;
+  certificateNumber: string; // e.g., "CERT-2026-0001"
+  studentId: string;
+  studentRegNo: string;
+  studentName: string;
+  department: string;
+  academicYear: string;
+  section: string;
+  certificateType: DirectCertificateType;
+  certificateTypeName: string; // e.g. "Hackathon Certificate", "NPTEL / Online Course"
+  title: string; // Event / Course / Organization Name
+  description: string; // 1-2 line description
+  issueDate: string;
+  certificateUrl: string;
+  certificatePublicId?: string;
+  status: 'PENDING' | 'VERIFIED' | 'REJECTED';
+  verifiedBy?: string;
+  verifiedByName?: string;
+  verifiedAt?: string;
+  remarks?: string;
+  createdAt: string;
+  updatedAt: string;
 }

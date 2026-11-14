@@ -25,6 +25,7 @@ import {
   subscribeToStudents,
   subscribeToStaff,
   subscribeToStudentRequests,
+  deleteStudent,
 } from '../../services/firebase/authService';
 import { auth } from '../../services/firebase/firebaseConfig';
 import { updatePassword as fbUpdatePassword } from 'firebase/auth';
@@ -42,17 +43,22 @@ import {
   preApproveApplication,
   completeEventApplication,
   enableStudentApplicationEditing,
+  disableStudentApplicationEditing,
   rejectApplication,
   deleteApplication,
+  deleteStudentSubmissions,
+  deleteAllApplications,
   createStaffAnnouncement,
   getUserNotifications,
 } from '../../services/firebase/firestoreService';
+import { PinVerificationModal } from '../../components/common/PinVerificationModal';
 import { StudentDirectoryMonitor } from '../../components/monitoring/StudentDirectoryMonitor';
 import { WinnersCertificateShowcase } from '../../components/analytics/WinnersCertificateShowcase';
 import { EventParticipationAnalytics } from '../../components/analytics/EventParticipationAnalytics';
 import { ExportManagement } from '../../components/common/ExportManagement';
 import { SubmissionsPanel } from '../../components/common/SubmissionsPanel';
 import { DeleteThingsPanel } from '../../components/common/DeleteThingsPanel';
+import { DirectCertificatesPanel } from '../../components/common/DirectCertificatesPanel';
 import { EventOutcomeAnalytics } from '../../components/common/EventOutcomeAnalytics';
 import { Button } from '../../components/common/Button';
 import { Badge } from '../../components/common/Badge';
@@ -94,7 +100,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab: reque
   const { currentUser } = useAuth();
 
   const [activeTab, setActiveTab] = useState<
-    'overview' | 'my_profile' | 'students' | 'staff' | 'approvals' | 'submissions' | 'events' | 'categories' | 'analytics' | 'exports' | 'announcements' | 'settings'
+    'overview' | 'my_profile' | 'students' | 'staff' | 'approvals' | 'submissions' | 'certificates' | 'delete_things' | 'events' | 'categories' | 'analytics' | 'exports' | 'announcements' | 'settings'
   >('overview');
 
   const [students, setStudents] = useState<Student[]>(() => getLocalStudents());
@@ -252,6 +258,8 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab: reque
       'staff',
       'approvals',
       'submissions',
+      'certificates',
+      'delete_things',
       'analytics',
       'categories',
       'exports',
@@ -549,6 +557,23 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab: reque
         alert(`Successfully imported ${addedCount} student records!`);
       },
     });
+  };
+
+  const handleDeleteStudentSubmissions = async (studentRegNo: string) => {
+    await deleteStudentSubmissions(studentRegNo);
+    const norm = studentRegNo.toUpperCase().trim();
+    setApplications(current => current.filter(a => a.studentRegNo.toUpperCase().trim() !== norm));
+  };
+
+  const handleDeleteStudentAccount = async (student: Student) => {
+    await deleteStudent(student.id, student.registrationNumber);
+    setStudents(current => current.filter(s => s.id !== student.id));
+    setApplications(current => current.filter(a => a.studentRegNo.toUpperCase().trim() !== student.registrationNumber.toUpperCase().trim()));
+  };
+
+  const handleDeleteAllSubmissions = async () => {
+    await deleteAllApplications();
+    setApplications([]);
   };
 
   // Open the dedicated export center from the overview action.
@@ -1181,6 +1206,19 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab: reque
               alert(error instanceof Error ? error.message : 'Unable to enable student editing.');
             }
           }}
+          onDisableStudentEdit={async application => {
+            try {
+              const updated = await disableStudentApplicationEditing(
+                application.id,
+                currentUser?.uid || 'master-admin',
+                currentUser?.displayName || 'Master Admin',
+                'MASTER_ADMIN'
+              );
+              setApplications(current => current.map(item => item.id === updated.id ? updated : item));
+            } catch (error) {
+              alert(error instanceof Error ? error.message : 'Unable to lock student editing.');
+            }
+          }}
           onApprove={async application => {
             try {
               const updated = await preApproveApplication(
@@ -1236,6 +1274,28 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab: reque
               alert(error instanceof Error ? error.message : 'Deletion failed.');
             }
           }}
+        />
+      )}
+
+      {/* Tab: Direct Certificates (Single-Step Submissions) */}
+      {activeTab === 'certificates' && (
+        <DirectCertificatesPanel
+          editorUid={currentUser?.uid || 'master-admin'}
+          editorName={adminName}
+          editorRole="MASTER_ADMIN"
+          isMasterAdmin={true}
+        />
+      )}
+
+      {/* Tab: Delete Records (Guarded with 2-Step PIN 927624) */}
+      {activeTab === 'delete_things' && (
+        <DeleteThingsPanel
+          students={students}
+          applications={applications}
+          onDeleteStudentSubmissions={handleDeleteStudentSubmissions}
+          onDeleteStudent={handleDeleteStudentAccount}
+          onDeleteAllSubmissions={handleDeleteAllSubmissions}
+          isMasterAdmin={true}
         />
       )}
 
@@ -1807,41 +1867,21 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab: reque
       )}
 
       {deleteTarget && (
-        <Modal
+        <PinVerificationModal
           isOpen={true}
-          onClose={() => {
-            setDeleteTarget(null);
-            setDeletePin('');
-            setDeleteWarningAccepted(false);
+          onClose={() => setDeleteTarget(null)}
+          onSuccess={async () => {
+            if (deleteTarget) {
+              await deleteStudent(deleteTarget.id, deleteTarget.registrationNumber);
+              setStudents(current => current.filter(s => s.id !== deleteTarget.id));
+              setApplications(current => current.filter(a => a.studentRegNo.toUpperCase().trim() !== deleteTarget.registrationNumber.toUpperCase().trim()));
+              setDeleteTarget(null);
+            }
           }}
-          title="Delete Student Data"
-          subtitle="Two warnings are required before continuing"
-          maxWidth="md"
-        >
-          <div className="space-y-4">
-            <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
-              <p className="text-sm font-bold text-rose-900">Warning 1: This action is destructive</p>
-              <p className="mt-1 text-xs leading-5 text-rose-800">
-                This request targets all data associated with {deleteTarget.fullName} ({deleteTarget.registrationNumber}), including submitted event records.
-              </p>
-            </div>
-            <label className="flex items-start gap-2 text-xs font-semibold text-slate-700">
-              <input type="checkbox" checked={deleteWarningAccepted} onChange={event => setDeleteWarningAccepted(event.target.checked)} className="mt-0.5" />
-              I understand that this student data cannot be recovered.
-            </label>
-            {deleteWarningAccepted && (
-              <div className="space-y-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
-                <p className="text-sm font-bold text-amber-900">Warning 2: Confirm with the secret PIN</p>
-                <p className="text-xs leading-5 text-amber-800">Enter the secret PIN to verify authorization. The PIN is never displayed.</p>
-                <input type="password" value={deletePin} onChange={event => setDeletePin(event.target.value)} placeholder="Secret PIN" className="w-full rounded-xl border border-amber-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" />
-                <button type="button" disabled={!deletePin} onClick={() => { setDeleteTarget(null); setDeletePin(''); setDeleteWarningAccepted(false); }} className="w-full rounded-xl bg-slate-300 px-3 py-2.5 text-xs font-bold text-slate-600 disabled:cursor-not-allowed">
-                  Confirm Delete Request
-                </button>
-                <p className="text-[11px] font-semibold text-amber-800">UI-only mode: no data will be deleted.</p>
-              </div>
-            )}
-          </div>
-        </Modal>
+          title={`Delete Student: ${deleteTarget.fullName} (${deleteTarget.registrationNumber})`}
+          description={`Permanently delete student ${deleteTarget.fullName} (${deleteTarget.registrationNumber}) and all their submitted event records from Cloud Firestore? This action is permanent and cannot be undone.`}
+          confirmButtonText="Delete Student & Data"
+        />
       )}
 
       {/* Staff Role Assignment Modal */}
@@ -1889,7 +1929,7 @@ export const AdminDashboard: React.FC<AdminDashboardProps> = ({ activeTab: reque
                 ['Phone Number', selectedStudent.mobile || 'Not provided', false],
                 ['Email Address', selectedStudent.email || 'Not provided', false],
                 ['Last Login', selectedStudent.lastLoginAt ? new Date(selectedStudent.lastLoginAt).toLocaleString() : 'Never', false],
-                ['Events Participated', String(selectedStudent.eventCount || 0), false],
+                ['Events Participated', String(applications.filter(a => a.studentRegNo.toUpperCase().trim().replace(/\s+/g, '') === selectedStudent.registrationNumber.toUpperCase().trim().replace(/\s+/g, '') && a.status !== 'DRAFT').length), false],
               ].map(([label, value, mono]) => (
                 <div key={label as string} className="rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3">
                   <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{label}</p>
